@@ -27,6 +27,21 @@
   schema.yaml
 ```
 
+## Brief generation
+
+`sima brief <task>` creates a compact task briefing under `.sima/personal/briefs/`.
+
+The v0 brief includes:
+
+- the task;
+- system skills created by `sima init`;
+- active personal memory and skills;
+- active team/shared scaffold entries when present;
+- SDD artifacts under `docs/specs`, `docs/plans`, and `openspec/changes`;
+- safety policy reminders for reward-hacking prevention and clean-session archivist review.
+
+Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
+
 ## Backend profiles
 
 SIMA must support multiple Claude Code/Codex installations and configs on the same machine. Backends are named profiles in `.sima/config.yaml`:

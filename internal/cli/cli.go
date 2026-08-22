@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/antowkos/sima/internal/backend"
+	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/simafs"
 )
@@ -33,6 +34,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runDoctor(args[2:], stdout, stderr)
 	case "backend":
 		return runBackend(args[2:], stdout, stderr)
+	case "brief":
+		return runBrief(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -46,6 +49,7 @@ func printHelp(w io.Writer) {
 Usage:
   sima init [path]
   sima doctor [path]
+  sima brief <task> [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -54,6 +58,7 @@ Usage:
 Current v0 slice:
   init     Create project-local .sima scaffold
   doctor   Check SIMA project state and local runtime prerequisites
+  brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -122,6 +127,45 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "SIMA doctor found problems")
 		return 1
 	}
+	return 0
+}
+
+func runBrief(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: sima brief <task> [--path <path>]")
+		return 2
+	}
+	root := "."
+	var taskParts []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			taskParts = append(taskParts, arg)
+		}
+	}
+	if len(taskParts) == 0 {
+		fmt.Fprintln(stderr, "task is required")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := brief.Generate(abs, brief.Options{Task: strings.Join(taskParts, " ")})
+	if err != nil {
+		fmt.Fprintf(stderr, "brief failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Brief written: %s\n", result.Path)
 	return 0
 }
 

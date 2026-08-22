@@ -32,6 +32,28 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestBriefCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "brief", "implement", "backend", "run", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("brief code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Brief written:") {
+		t.Fatalf("unexpected brief output: %q", out.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "briefs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one brief, got %d", len(entries))
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
