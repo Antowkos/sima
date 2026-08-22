@@ -41,6 +41,7 @@ func Init(projectRoot string) ([]string, error) {
 		"schema.yaml": defaultSchema,
 		filepath.Join("system", "skills", "skill-authoring.md"):  skillAuthoringSkill,
 		filepath.Join("system", "skills", "memory-authoring.md"): memoryAuthoringSkill,
+		filepath.Join("system", "skills", "sdd-workflow.md"):     sddWorkflowSkill,
 		filepath.Join("system", "prompts", "archivist.md"):       archivistPrompt,
 		filepath.Join("system", "prompts", "worker.md"):          workerPrompt,
 	}

@@ -2,8 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/antowkos/sima/internal/simafs"
 )
 
 func TestVersion(t *testing.T) {
@@ -25,5 +29,42 @@ func TestUnknownCommand(t *testing.T) {
 	}
 	if !strings.Contains(err.String(), "unknown command") {
 		t.Fatalf("unexpected stderr: %q", err.String())
+	}
+}
+
+func TestBackendAddListDoctor(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "test", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "backend", "list", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend list code = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(out.String(), "test\tcodex\t/bin/echo") {
+		t.Fatalf("unexpected list output: %q", out.String())
+	}
+
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "backend", "doctor", "test", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend doctor code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "[ok] test") {
+		t.Fatalf("unexpected doctor output: %q", out.String())
+	}
+
+	if _, statErr := os.Stat(filepath.Join(root, ".sima", "config.yaml")); statErr != nil {
+		t.Fatalf("config.yaml missing: %v", statErr)
 	}
 }

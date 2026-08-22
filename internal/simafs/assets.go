@@ -86,6 +86,29 @@ Use this when drafting, updating, deprecating, or superseding memory cards.
 6. Use anti_pattern or guardrail for lessons about what not to do.
 `
 
+const sddWorkflowSkill = `---
+name: sdd-workflow
+description: "Use when running SIMA with spec-driven development. Preserve specs as source artifacts and derive compact briefings."
+scope: system
+managed_by: sima
+---
+
+# SDD Workflow
+
+## Trigger
+
+Use this when a task has product specs, technical specs, OpenSpec changes, or implementation plans.
+
+## Rules
+
+1. Treat specs/plans as source artifacts, not active memory by default.
+2. Brief from specs by extracting constraints, acceptance criteria, open questions, and verification gates.
+3. Do not save the full spec as a memory card.
+4. After execution, propose only durable lessons: decisions, invariants, gotchas, guardrails, anti-patterns, or reusable skills.
+5. Preserve evidence pointers back to the exact spec/plan paths.
+6. If implementation diverges from spec, record the divergence and require archivist scrutiny before learning from it.
+`
+
 const archivistPrompt = `# SIMA Archivist
 
 You are the clean-session archivist/checker for SIMA. You did not perform the task. Judge only bounded evidence: task, brief, diff, logs, verification, worker report, proposals, and relevant existing memory/skills.

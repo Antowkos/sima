@@ -27,6 +27,39 @@
   schema.yaml
 ```
 
+## Backend profiles
+
+SIMA must support multiple Claude Code/Codex installations and configs on the same machine. Backends are named profiles in `.sima/config.yaml`:
+
+```yaml
+backends:
+  claude-main:
+    kind: claude-code
+    executable: /opt/homebrew/bin/claude
+    config_path: ~/.claude/settings.json
+  codex-work:
+    kind: codex
+    executable: ~/bin/codex-work
+    config_path: ~/.codex-work/config.toml
+```
+
+Commands:
+
+```bash
+sima backend list
+sima backend add <name> --kind <claude-code|codex> --executable <path>
+sima backend doctor <name>
+```
+
+## SDD support
+
+SIMA treats spec-driven-development artifacts as first-class source artifacts:
+
+- product specs, technical specs, OpenSpec changes, and implementation plans are preserved as evidence/source material;
+- `brief` should extract constraints, acceptance criteria, open questions, and verification gates;
+- SIMA should not save whole specs as active memory;
+- after execution, SIMA should learn only durable decisions, invariants, gotchas, guardrails, anti-patterns, or reusable skills with evidence pointers back to specs.
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:
