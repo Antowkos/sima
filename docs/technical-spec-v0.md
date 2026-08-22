@@ -75,6 +75,28 @@ SIMA treats spec-driven-development artifacts as first-class source artifacts:
 - SIMA should not save whole specs as active memory;
 - after execution, SIMA should learn only durable decisions, invariants, gotchas, guardrails, anti-patterns, or reusable skills with evidence pointers back to specs.
 
+## Run artifact capture
+
+`sima run --backend <name> --task <task>` creates a bounded worker run under `.sima/personal/runs/<run-id>/`.
+
+The v0 run directory contains:
+
+```text
+task.md
+brief.md
+command.txt
+stdout.log
+stderr.log
+worker-report.yaml
+```
+
+The command first generates a brief, copies it into the run directory, builds a backend-specific prompt, executes the named backend profile, and records stdout/stderr plus a structured worker report. v0 does not yet run the clean archivist or auto-apply proposals; this run artifact bundle is the input for that next slice.
+
+Backend command mapping for v0:
+
+- `claude-code`: `<executable> -p <prompt>`
+- `codex`: `<executable> exec <prompt>`
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:

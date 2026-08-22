@@ -10,6 +10,7 @@ import (
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
 )
 
@@ -36,6 +37,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runBackend(args[2:], stdout, stderr)
 	case "brief":
 		return runBrief(args[2:], stdout, stderr)
+	case "run":
+		return runRun(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -50,6 +53,7 @@ Usage:
   sima init [path]
   sima doctor [path]
   sima brief <task> [--path <path>]
+  sima run --backend <name> --task <task> [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -59,6 +63,7 @@ Current v0 slice:
   init     Create project-local .sima scaffold
   doctor   Check SIMA project state and local runtime prerequisites
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
+  run      Run a bounded task through a named backend and capture artifacts
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -166,6 +171,61 @@ func runBrief(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "Brief written: %s\n", result.Path)
+	return 0
+}
+
+func runRun(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	backendName := ""
+	task := ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--backend":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--backend requires a value")
+				return 2
+			}
+			i++
+			backendName = args[i]
+		case "--task":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--task requires a value")
+				return 2
+			}
+			i++
+			task = args[i]
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+			return 2
+		}
+	}
+	if backendName == "" || task == "" {
+		fmt.Fprintln(stderr, "usage: sima run --backend <name> --task <task> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := runner.Run(abs, runner.Options{BackendName: backendName, Task: task})
+	if err != nil {
+		fmt.Fprintf(stderr, "run failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Run %s complete: %s\n", result.RunID, result.RunDir)
+	fmt.Fprintf(stdout, "Exit code: %d\n", result.ExitCode)
+	if result.ExitCode != 0 {
+		return 1
+	}
 	return 0
 }
 
