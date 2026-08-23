@@ -65,7 +65,7 @@ Usage:
   sima init [path]
   sima doctor [path]
   sima brief <task> [--path <path>]
-  sima run --backend <name> --task <task> [--path <path>]
+  sima run --backend <name> --task <task> [--path <path>] [--no-propose]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -79,7 +79,7 @@ Current v0 slice:
   init     Create project-local .sima scaffold
   doctor   Check SIMA project state and local runtime prerequisites
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
-  run      Run a bounded task through a named backend and capture artifacts
+  run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
   apply    Promote an approved safe personal proposal into active memory/skills
@@ -198,6 +198,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	root := "."
 	backendName := ""
 	task := ""
+	autoPropose := true
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -222,13 +223,15 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			root = args[i]
+		case "--no-propose":
+			autoPropose = false
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
 			return 2
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima run --backend <name> --task <task> [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima run --backend <name> --task <task> [--path <path>] [--no-propose]")
 		return 2
 	}
 	abs, err := filepath.Abs(root)
@@ -245,6 +248,17 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Exit code: %d\n", result.ExitCode)
 	if result.ExitCode != 0 {
 		return 1
+	}
+	if autoPropose {
+		proposalResult, err := proposal.Generate(abs, proposal.Options{FromRun: result.RunID})
+		if err != nil {
+			fmt.Fprintf(stderr, "auto-propose failed: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Proposal written: %s\n", proposalResult.Path)
+		fmt.Fprintf(stdout, "Candidates: %d\n", proposalResult.Candidates)
+		fmt.Fprintf(stdout, "Next: sima review --path %s\n", abs)
+		fmt.Fprintf(stdout, "Next: sima archivist --proposal %s --path %s\n", filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml")), abs)
 	}
 	return 0
 }

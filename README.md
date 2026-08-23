@@ -12,7 +12,7 @@ Generated briefs include bounded snippets from active memory cards and skills, s
 sima init [path]
 sima doctor [path]
 sima brief "task description" [--path path]
-sima run --backend <name> --task "task description" [--path path]
+sima run --backend <name> --task "task description" [--path path] [--no-propose]
 sima propose --from-run <run-id|last|path> [--path path]
 sima review [--path path] [--all]
 sima apply <proposal-id|path> [--path path]

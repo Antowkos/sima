@@ -53,6 +53,31 @@ func TestRunCreatesArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunAllocatesUniqueRunDir(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if err := config.AddBackend(root, "echo", config.BackendProfile{Kind: "codex", Executable: "/bin/echo"}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+	now := time.Date(2026, 8, 22, 12, 31, 0, 0, time.UTC)
+	first, err := Run(root, Options{BackendName: "echo", Task: "first", Now: now})
+	if err != nil {
+		t.Fatalf("first Run() error = %v", err)
+	}
+	second, err := Run(root, Options{BackendName: "echo", Task: "second", Now: now})
+	if err != nil {
+		t.Fatalf("second Run() error = %v", err)
+	}
+	if first.RunID == second.RunID || first.RunDir == second.RunDir {
+		t.Fatalf("run ids should be unique: first=%+v second=%+v", first, second)
+	}
+	if !strings.HasSuffix(second.RunID, "-02") {
+		t.Fatalf("second RunID = %q, want collision suffix", second.RunID)
+	}
+}
+
 func TestRunRequiresConfiguredBackend(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {

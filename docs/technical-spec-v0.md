@@ -77,7 +77,9 @@ SIMA treats spec-driven-development artifacts as first-class source artifacts:
 
 ## Run artifact capture
 
-`sima run --backend <name> --task <task>` creates a bounded worker run under `.sima/personal/runs/<run-id>/`.
+`sima run --backend <name> --task <task> [--no-propose]` creates a bounded worker run under `.sima/personal/runs/<run-id>/`.
+
+By default, a successful run immediately calls the same proposal generator as `sima propose --from-run <run-id>` and prints next-step commands for review and archivist decision. `--no-propose` disables this auto-chain for diagnostic/manual runs.
 
 The v0 run directory contains:
 

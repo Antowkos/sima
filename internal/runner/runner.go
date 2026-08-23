@@ -80,9 +80,9 @@ func Run(projectRoot string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 
-	runID := opts.Now.UTC().Format("20060102-150405") + "-" + sanitize(opts.BackendName)
-	runDir := filepath.Join(projectRoot, ".sima", "personal", "runs", runID)
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
+	baseRunID := opts.Now.UTC().Format("20060102-150405") + "-" + sanitize(opts.BackendName)
+	runID, runDir, err := allocateRunDir(projectRoot, baseRunID)
+	if err != nil {
 		return Result{}, err
 	}
 
@@ -143,6 +143,23 @@ func Run(projectRoot string, opts Options) (Result, error) {
 	}
 
 	return Result{RunID: runID, RunDir: runDir, ExitCode: exitCode}, nil
+}
+
+func allocateRunDir(projectRoot, baseRunID string) (string, string, error) {
+	runsRoot := filepath.Join(projectRoot, ".sima", "personal", "runs")
+	for i := 0; i < 100; i++ {
+		runID := baseRunID
+		if i > 0 {
+			runID = fmt.Sprintf("%s-%02d", baseRunID, i+1)
+		}
+		runDir := filepath.Join(runsRoot, runID)
+		if err := os.Mkdir(runDir, 0o755); err == nil {
+			return runID, runDir, nil
+		} else if !os.IsExist(err) {
+			return "", "", err
+		}
+	}
+	return "", "", fmt.Errorf("could not allocate unique run directory for %s", baseRunID)
 }
 
 func buildPrompt(task, briefPath string) string {

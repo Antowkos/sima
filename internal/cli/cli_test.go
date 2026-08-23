@@ -70,7 +70,7 @@ func TestRunCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	if !strings.Contains(out.String(), "Exit code: 0") {
+	if !strings.Contains(out.String(), "Exit code: 0") || !strings.Contains(out.String(), "Proposal written:") || !strings.Contains(out.String(), "Next: sima review") {
 		t.Fatalf("unexpected run output: %q", out.String())
 	}
 	entries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "runs"))
@@ -79,6 +79,41 @@ func TestRunCommand(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Fatalf("expected one run, got %d", len(entries))
+	}
+	proposalEntries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposalEntries) != 1 {
+		t.Fatalf("expected one auto proposal, got %d", len(proposalEntries))
+	}
+}
+
+func TestRunCommandNoPropose(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "run", "--backend", "echo", "--task", "capture artifacts", "--path", root, "--no-propose"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if strings.Contains(out.String(), "Proposal written:") {
+		t.Fatalf("unexpected auto proposal output: %q", out.String())
+	}
+	proposalEntries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposalEntries) != 0 {
+		t.Fatalf("expected no auto proposal, got %d", len(proposalEntries))
 	}
 }
 
