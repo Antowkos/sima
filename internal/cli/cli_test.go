@@ -149,6 +149,51 @@ func TestReviewCommand(t *testing.T) {
 	}
 }
 
+func TestApplyCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "run", "--backend", "echo", "--task", "capture artifacts", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "propose", "--from-run", "last", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("propose code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposalPath := filepath.Join(root, ".sima", "personal", "memory", "candidates", entries[0].Name())
+	data, err := os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(proposalPath, []byte(strings.Replace(string(data), "archivist_decision: defer", "archivist_decision: apply", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "apply", proposalPath, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("apply code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Applied proposal:") || !strings.Contains(out.String(), ".sima/personal/memory/cards/") {
+		t.Fatalf("unexpected apply output: %q", out.String())
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/antowkos/sima/internal/apply"
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
@@ -45,6 +46,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runPropose(args[2:], stdout, stderr)
 	case "review":
 		return runReview(args[2:], stdout, stderr)
+	case "apply":
+		return runApply(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -62,6 +65,7 @@ Usage:
   sima run --backend <name> --task <task> [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
+  sima apply <proposal-id|path> [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -74,6 +78,7 @@ Current v0 slice:
   run      Run a bounded task through a named backend and capture artifacts
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
+  apply    Promote an approved safe personal proposal into active memory/skills
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -336,6 +341,52 @@ func runReview(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	fmt.Fprintf(stdout, "Summary: %d total, %d valid, %d blocked\n", len(result.Items), valid, blocked)
+	return 0
+}
+
+func runApply(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	target := ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			if strings.HasPrefix(arg, "--") {
+				fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+				return 2
+			}
+			if target != "" {
+				fmt.Fprintln(stderr, "usage: sima apply <proposal-id|path> [--path <path>]")
+				return 2
+			}
+			target = arg
+		}
+	}
+	if target == "" {
+		fmt.Fprintln(stderr, "usage: sima apply <proposal-id|path> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := apply.Apply(abs, apply.Options{Target: target})
+	if err != nil {
+		fmt.Fprintf(stderr, "apply failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Applied proposal: %s\n", result.ProposalPath)
+	for _, path := range result.Applied {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
 	return 0
 }
 

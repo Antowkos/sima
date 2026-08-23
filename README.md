@@ -13,6 +13,7 @@ sima brief "task description" [--path path]
 sima run --backend <name> --task "task description" [--path path]
 sima propose --from-run <run-id|last|path> [--path path]
 sima review [--path path] [--all]
+sima apply <proposal-id|path> [--path path]
 sima backend list [path]
 sima backend add <name> --kind <claude-code|codex> --executable <path>
 sima backend doctor <name> [path]

@@ -50,6 +50,7 @@ type Proposal struct {
 	CandidateSkills    []CandidateSkill `yaml:"candidate_skills,omitempty"`
 	Evidence           []Evidence       `yaml:"evidence"`
 	CreatedAt          string           `yaml:"created_at"`
+	AppliedAt          string           `yaml:"applied_at,omitempty"`
 	ReviewInstructions []string         `yaml:"review_instructions"`
 }
 

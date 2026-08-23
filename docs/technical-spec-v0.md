@@ -122,6 +122,21 @@ The v0 review gate marks an item blocked when:
 
 Without `--all`, review only shows proposals with `status: candidate`.
 
+## Proposal apply
+
+`sima apply <proposal-id|path> [--path <path>]` promotes an approved personal proposal into active `.sima` knowledge.
+
+v0 gates are intentionally strict:
+
+- proposal must pass `sima review` validation;
+- `status` must be `candidate`;
+- `scope` must be `personal`;
+- `safety.decision` must be `safe`;
+- `archivist_decision` must be `apply`;
+- proposal must contain at least one candidate memory or skill.
+
+When gates pass, SIMA writes candidate memories to `.sima/personal/memory/cards/*.yaml`, candidate skills to `.sima/personal/skills/active/*.md`, and marks the source proposal `status: applied` with `applied_at`.
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:
