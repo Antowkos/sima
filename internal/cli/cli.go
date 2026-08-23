@@ -11,6 +11,7 @@ import (
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/proposal"
+	"github.com/antowkos/sima/internal/review"
 	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
 )
@@ -42,6 +43,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runRun(args[2:], stdout, stderr)
 	case "propose":
 		return runPropose(args[2:], stdout, stderr)
+	case "review":
+		return runReview(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -58,6 +61,7 @@ Usage:
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
+  sima review [--path <path>] [--all]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -69,6 +73,7 @@ Current v0 slice:
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend and capture artifacts
   propose  Create a candidate proposal from a captured run bundle
+  review   Validate and summarize pending candidate proposals
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -278,6 +283,59 @@ func runPropose(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Archivist decision: %s\n", result.Decision)
 	fmt.Fprintf(stdout, "Safety: %s\n", result.Safety)
 	fmt.Fprintf(stdout, "Candidates: %d\n", result.Candidates)
+	return 0
+}
+
+func runReview(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	all := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--all":
+			all = true
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := review.Review(abs, review.Options{All: all})
+	if err != nil {
+		fmt.Fprintf(stderr, "review failed: %v\n", err)
+		return 1
+	}
+	if len(result.Items) == 0 {
+		fmt.Fprintln(stdout, "No candidate proposals found")
+		return 0
+	}
+	valid := 0
+	blocked := 0
+	for _, item := range result.Items {
+		state := "valid"
+		if len(item.Problems) > 0 || item.Safety != "safe" {
+			state = "blocked"
+			blocked++
+		} else {
+			valid++
+		}
+		fmt.Fprintf(stdout, "%s\t%s\tstatus=%s\tdecision=%s\tsafety=%s\tcandidates=%d\tevidence=%d\t%s\n", state, item.ID, item.Status, item.Decision, item.Safety, item.Candidates, item.Evidence, item.Path)
+		for _, problem := range item.Problems {
+			fmt.Fprintf(stdout, "  - %s\n", problem)
+		}
+	}
+	fmt.Fprintf(stdout, "Summary: %d total, %d valid, %d blocked\n", len(result.Items), valid, blocked)
 	return 0
 }
 

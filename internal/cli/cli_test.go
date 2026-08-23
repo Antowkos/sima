@@ -116,6 +116,39 @@ func TestProposeCommand(t *testing.T) {
 	}
 }
 
+func TestReviewCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "run", "--backend", "echo", "--task", "capture artifacts", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "propose", "--from-run", "last", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("propose code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "review", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("review code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "valid") || !strings.Contains(out.String(), "Summary: 1 total, 1 valid, 0 blocked") {
+		t.Fatalf("unexpected review output: %q", out.String())
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

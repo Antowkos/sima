@@ -108,6 +108,20 @@ The v0 proposal is intentionally conservative:
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;
 - it emits a starter candidate only for successful, safe runs, and still requires evidence-backed review.
 
+## Proposal review
+
+`sima review [--path <path>] [--all]` reads personal candidate proposals, validates their structure, and prints a compact review queue summary.
+
+The v0 review gate marks an item blocked when:
+
+- required fields are missing;
+- proposal operation/status/decision/safety values are unsupported;
+- evidence pointers are missing or malformed;
+- candidate memories/skills lack triggerable summaries or evidence;
+- a suspicious/unsafe proposal asks to `apply`.
+
+Without `--all`, review only shows proposals with `status: candidate`.
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:
