@@ -23,7 +23,11 @@ func TestGenerateWritesBriefWithSddArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	memoryPath := filepath.Join(root, ".sima", "personal", "memory", "cards", "gotcha.yaml")
-	if err := os.WriteFile(memoryPath, []byte("id: gotcha\n"), 0o644); err != nil {
+	if err := os.WriteFile(memoryPath, []byte("id: gotcha\ntype: gotcha\ntitle: Remember active cards\ntrigger: When building a SIMA brief\nsummary: Active memory content should appear in the brief.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillPath := filepath.Join(root, ".sima", "personal", "skills", "active", "brief-skill.md")
+	if err := os.WriteFile(skillPath, []byte("# Brief Skill\n\nUse when testing active skill snippets.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -34,7 +38,7 @@ func TestGenerateWritesBriefWithSddArtifacts(t *testing.T) {
 	if _, err := os.Stat(result.Path); err != nil {
 		t.Fatalf("brief file missing: %v", err)
 	}
-	for _, want := range []string{"# SIMA Brief", "build brief", ".sima/system/skills/sdd-workflow.md", ".sima/personal/memory/cards/gotcha.yaml", "docs/plans/test-plan.md"} {
+	for _, want := range []string{"# SIMA Brief", "build brief", ".sima/system/skills/sdd-workflow.md", ".sima/personal/memory/cards/gotcha.yaml", "Remember active cards", "Active memory content should appear in the brief", ".sima/personal/skills/active/brief-skill.md", "Use when testing active skill snippets", "docs/plans/test-plan.md"} {
 		if !strings.Contains(result.Content, want) {
 			t.Fatalf("brief missing %q:\n%s", want, result.Content)
 		}

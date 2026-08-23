@@ -35,12 +35,12 @@ The v0 brief includes:
 
 - the task;
 - system skills created by `sima init`;
-- active personal memory and skills;
-- active team/shared scaffold entries when present;
-- SDD artifacts under `docs/specs`, `docs/plans`, and `openspec/changes`;
+- compact snippets from active personal memory and skills, with source pointers;
+- compact snippets from active team/shared scaffold entries when present;
+- SDD artifact paths under `docs/specs`, `docs/plans`, and `openspec/changes`;
 - safety policy reminders for reward-hacking prevention and clean-session archivist review.
 
-Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
+Brief content is bounded: active memory/skill snippets are truncated and limited by item count so briefings stay token-sparse while still surfacing learned knowledge. Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
 
 ## Backend profiles
 
