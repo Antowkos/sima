@@ -104,9 +104,11 @@ Backend command mapping for v0:
 The v0 proposal is intentionally conservative:
 
 - it references task, brief, command, stdout, stderr, and `worker-report.yaml` as evidence;
+- it reads structured `proposed_memory` and `proposed_skills` from `worker-report.yaml` or YAML stdout when present;
+- it fills missing candidate evidence from the run artifact bundle;
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;
-- it emits a starter candidate only for successful, safe runs, and still requires evidence-backed review.
+- it emits a fallback review candidate only for successful, safe runs with no structured worker proposals.
 
 ## Proposal review
 

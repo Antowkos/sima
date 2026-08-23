@@ -25,14 +25,16 @@ type Result struct {
 }
 
 type WorkerReport struct {
-	RunID      string `yaml:"run_id"`
-	Backend    string `yaml:"backend"`
-	Status     string `yaml:"status"`
-	Task       string `yaml:"task"`
-	BriefPath  string `yaml:"brief_path"`
-	ExitCode   int    `yaml:"exit_code"`
-	StdoutPath string `yaml:"stdout_path"`
-	StderrPath string `yaml:"stderr_path"`
+	RunID          string           `yaml:"run_id"`
+	Backend        string           `yaml:"backend"`
+	Status         string           `yaml:"status"`
+	Task           string           `yaml:"task"`
+	BriefPath      string           `yaml:"brief_path"`
+	ExitCode       int              `yaml:"exit_code"`
+	StdoutPath     string           `yaml:"stdout_path"`
+	StderrPath     string           `yaml:"stderr_path"`
+	ProposedMemory []Candidate      `yaml:"proposed_memory,omitempty"`
+	ProposedSkills []CandidateSkill `yaml:"proposed_skills,omitempty"`
 }
 
 type Proposal struct {
@@ -109,9 +111,11 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 
 	stdoutText := readText(filepath.Join(runDir, "stdout.log"), 4096)
 	stderrText := readText(filepath.Join(runDir, "stderr.log"), 4096)
+	stdoutReport := parseWorkerOutput(stdoutText)
 	safety := assessSafety(stdoutText + "\n" + stderrText)
 	summary := summarize(report, stdoutText, stderrText)
 	evidence := evidenceFor(projectRoot, runDir)
+	candidateMemories, candidateSkills := structuredCandidates(report, stdoutReport, evidence)
 
 	proposal := Proposal{
 		Version:           1,
@@ -137,13 +141,17 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		},
 	}
 	if report.Status == "success" && safety.Decision == "safe" {
-		proposal.CandidateMemories = []Candidate{{
-			Type:     "workflow",
-			Title:    "Review successful SIMA run for durable lessons",
-			Trigger:  "When learning from a completed SIMA run with captured artifacts.",
-			Summary:  "The run completed successfully; inspect the bounded artifact bundle and promote only durable, evidence-backed lessons.",
-			Evidence: evidence,
-		}}
+		proposal.CandidateMemories = candidateMemories
+		proposal.CandidateSkills = candidateSkills
+		if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
+			proposal.CandidateMemories = []Candidate{{
+				Type:     "workflow",
+				Title:    "Review successful SIMA run for durable lessons",
+				Trigger:  "When learning from a completed SIMA run with captured artifacts.",
+				Summary:  "The run completed successfully; inspect the bounded artifact bundle and promote only durable, evidence-backed lessons.",
+				Evidence: evidence,
+			}}
+		}
 	}
 
 	candidateDir := filepath.Join(projectRoot, ".sima", "personal", "memory", "candidates")
@@ -211,6 +219,36 @@ func readWorkerReport(runDir string) (WorkerReport, error) {
 		return WorkerReport{}, err
 	}
 	return report, nil
+}
+
+func parseWorkerOutput(stdoutText string) WorkerReport {
+	var report WorkerReport
+	text := strings.TrimSpace(stdoutText)
+	if text == "" {
+		return report
+	}
+	if err := yaml.Unmarshal([]byte(text), &report); err == nil {
+		return report
+	}
+	return WorkerReport{}
+}
+
+func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence) ([]Candidate, []CandidateSkill) {
+	memories := append([]Candidate{}, report.ProposedMemory...)
+	memories = append(memories, stdoutReport.ProposedMemory...)
+	skills := append([]CandidateSkill{}, report.ProposedSkills...)
+	skills = append(skills, stdoutReport.ProposedSkills...)
+	for i := range memories {
+		if len(memories[i].Evidence) == 0 {
+			memories[i].Evidence = evidence
+		}
+	}
+	for i := range skills {
+		if len(skills[i].Evidence) == 0 {
+			skills[i].Evidence = evidence
+		}
+	}
+	return memories, skills
 }
 
 func readText(path string, limit int) string {

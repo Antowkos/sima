@@ -27,17 +27,32 @@ type Result struct {
 }
 
 type WorkerReport struct {
-	RunID       string   `yaml:"run_id"`
-	Backend     string   `yaml:"backend"`
-	Status      string   `yaml:"status"`
-	Task        string   `yaml:"task"`
-	BriefPath   string   `yaml:"brief_path"`
-	Command     []string `yaml:"command"`
-	StartedAt   string   `yaml:"started_at"`
-	CompletedAt string   `yaml:"completed_at"`
-	ExitCode    int      `yaml:"exit_code"`
-	StdoutPath  string   `yaml:"stdout_path"`
-	StderrPath  string   `yaml:"stderr_path"`
+	RunID          string           `yaml:"run_id"`
+	Backend        string           `yaml:"backend"`
+	Status         string           `yaml:"status"`
+	Task           string           `yaml:"task"`
+	BriefPath      string           `yaml:"brief_path"`
+	Command        []string         `yaml:"command"`
+	StartedAt      string           `yaml:"started_at"`
+	CompletedAt    string           `yaml:"completed_at"`
+	ExitCode       int              `yaml:"exit_code"`
+	StdoutPath     string           `yaml:"stdout_path"`
+	StderrPath     string           `yaml:"stderr_path"`
+	ProposedMemory []ProposedMemory `yaml:"proposed_memory,omitempty"`
+	ProposedSkills []ProposedSkill  `yaml:"proposed_skills,omitempty"`
+}
+
+type ProposedMemory struct {
+	Type    string `yaml:"type"`
+	Title   string `yaml:"title"`
+	Trigger string `yaml:"trigger"`
+	Summary string `yaml:"summary"`
+}
+
+type ProposedSkill struct {
+	Name    string `yaml:"name"`
+	Trigger string `yaml:"trigger"`
+	Summary string `yaml:"summary"`
 }
 
 func Run(projectRoot string, opts Options) (Result, error) {
@@ -131,7 +146,21 @@ func Run(projectRoot string, opts Options) (Result, error) {
 }
 
 func buildPrompt(task, briefPath string) string {
-	return fmt.Sprintf("Read the SIMA brief at %s, then perform this bounded task and return a concise structured report: %s", briefPath, task)
+	return fmt.Sprintf(`Read the SIMA brief at %s, then perform this bounded task: %s
+
+Return a concise YAML report. If you learned durable, triggerable lessons, include them as:
+
+proposed_memory:
+  - type: gotcha|workflow|decision|invariant|rejected_approach|open_question|anti_pattern|guardrail
+    title: short title
+    trigger: when a future agent should recall it
+    summary: durable evidence-backed lesson
+proposed_skills:
+  - name: skill-name
+    trigger: when to use the procedure
+    summary: reusable procedure summary
+
+Do not propose transient task progress, raw logs, PR/issue status, or lessons from weakened tests/bypassed validation.`, briefPath, task)
 }
 
 func buildArgs(profile config.BackendProfile, prompt string) []string {

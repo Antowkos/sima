@@ -83,3 +83,92 @@ func TestGenerateLastRunAndSafetyFlags(t *testing.T) {
 		t.Fatalf("expected suspicious proposal:\n%s", data)
 	}
 }
+
+func TestGenerateUsesStructuredProposalsFromWorkerReport(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260822-140000-structured"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	report := `run_id: 20260822-140000-structured
+status: success
+exit_code: 0
+task: structured proposals
+proposed_memory:
+  - type: gotcha
+    title: Structured proposals are parsed
+    trigger: When a worker report contains proposed_memory.
+    summary: SIMA should preserve structured worker-proposed memory instead of replacing it with fallback text.
+proposed_skills:
+  - name: structured-proposal-skill
+    trigger: When a worker report contains proposed_skills.
+    summary: Convert worker-proposed skills into candidate skills with evidence.
+`
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Candidates != 2 {
+		t.Fatalf("Candidates = %d, want 2", result.Candidates)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"Structured proposals are parsed", "structured-proposal-skill", "worker-report.yaml"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260822-150000-stdout"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: stdout proposals\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout := `proposed_memory:
+  - type: workflow
+    title: Stdout YAML proposals are parsed
+    trigger: When worker stdout is a concise YAML report.
+    summary: SIMA can recover proposed memory from stdout when worker-report.yaml has no proposed fields.
+`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Candidates != 1 {
+		t.Fatalf("Candidates = %d, want 1", result.Candidates)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "Stdout YAML proposals are parsed") {
+		t.Fatalf("proposal missing stdout candidate:\n%s", data)
+	}
+}
