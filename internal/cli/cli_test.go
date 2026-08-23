@@ -82,6 +82,40 @@ func TestRunCommand(t *testing.T) {
 	}
 }
 
+func TestProposeCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "run", "--backend", "echo", "--task", "capture artifacts", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "propose", "--from-run", "last", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("propose code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Proposal written:") || !strings.Contains(out.String(), "Archivist decision: defer") {
+		t.Fatalf("unexpected propose output: %q", out.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one proposal, got %d", len(entries))
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

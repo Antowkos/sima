@@ -90,12 +90,23 @@ stderr.log
 worker-report.yaml
 ```
 
-The command first generates a brief, copies it into the run directory, builds a backend-specific prompt, executes the named backend profile, and records stdout/stderr plus a structured worker report. v0 does not yet run the clean archivist or auto-apply proposals; this run artifact bundle is the input for that next slice.
+The command first generates a brief, copies it into the run directory, builds a backend-specific prompt, executes the named backend profile, and records stdout/stderr plus a structured worker report. This run artifact bundle is the input for `sima propose` and the later clean archivist/auto-apply flow.
 
 Backend command mapping for v0:
 
 - `claude-code`: `<executable> -p <prompt>`
 - `codex`: `<executable> exec <prompt>`
+
+## Proposal generation
+
+`sima propose --from-run <run-id|last|path>` creates a personal candidate proposal under `.sima/personal/memory/candidates/` from a bounded run bundle.
+
+The v0 proposal is intentionally conservative:
+
+- it references task, brief, command, stdout, stderr, and `worker-report.yaml` as evidence;
+- it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
+- it sets `archivist_decision: defer` so a clean archivist session must review before apply;
+- it emits a starter candidate only for successful, safe runs, and still requires evidence-backed review.
 
 ## Archivist contract
 

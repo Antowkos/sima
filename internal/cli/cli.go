@@ -10,6 +10,7 @@ import (
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
 )
@@ -39,6 +40,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runBrief(args[2:], stdout, stderr)
 	case "run":
 		return runRun(args[2:], stdout, stderr)
+	case "propose":
+		return runPropose(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -54,6 +57,7 @@ Usage:
   sima doctor [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>]
+  sima propose --from-run <run-id|last|path> [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -64,6 +68,7 @@ Current v0 slice:
   doctor   Check SIMA project state and local runtime prerequisites
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend and capture artifacts
+  propose  Create a candidate proposal from a captured run bundle
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -226,6 +231,53 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	if result.ExitCode != 0 {
 		return 1
 	}
+	return 0
+}
+
+func runPropose(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	fromRun := ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--from-run":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--from-run requires a value")
+				return 2
+			}
+			i++
+			fromRun = args[i]
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+			return 2
+		}
+	}
+	if fromRun == "" {
+		fmt.Fprintln(stderr, "usage: sima propose --from-run <run-id|last|path> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := proposal.Generate(abs, proposal.Options{FromRun: fromRun})
+	if err != nil {
+		fmt.Fprintf(stderr, "propose failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Proposal written: %s\n", result.Path)
+	fmt.Fprintf(stdout, "Run: %s\n", result.RunID)
+	fmt.Fprintf(stdout, "Archivist decision: %s\n", result.Decision)
+	fmt.Fprintf(stdout, "Safety: %s\n", result.Safety)
+	fmt.Fprintf(stdout, "Candidates: %d\n", result.Candidates)
 	return 0
 }
 
