@@ -267,6 +267,50 @@ func TestArchivistCommand(t *testing.T) {
 	}
 }
 
+func TestLearnCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture and apply safe lesson", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Run ", "Proposal written:", "Archivist decision: apply", "Applied proposal:", "Learn complete:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("learn output missing %q: %q", want, out.String())
+		}
+	}
+	cards, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "cards"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 1 {
+		t.Fatalf("expected one applied card, got %d", len(cards))
+	}
+	proposals, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("expected one proposal, got %d", len(proposals))
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", proposals[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: applied") || !strings.Contains(string(data), "archivist_decision: apply") {
+		t.Fatalf("proposal not marked applied:\n%s", data)
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

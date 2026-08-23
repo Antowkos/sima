@@ -94,6 +94,16 @@ worker-report.yaml
 
 The command first generates a brief, copies it into the run directory, builds a backend-specific prompt, executes the named backend profile, and records stdout/stderr plus a structured worker report. This run artifact bundle is the input for `sima propose` and the later clean archivist/auto-apply flow.
 
+## One-command learn loop
+
+`sima learn --backend <name> --task <task> [--path <path>]` runs the gated personal self-improvement loop:
+
+```text
+run -> propose -> archivist -> apply
+```
+
+It stops without applying when the worker run fails, proposal generation fails, safety/review gates reject the proposal, or the archivist returns `reject`/`defer`. Only an `archivist_decision: apply` proposal reaches `sima apply`.
+
 Backend command mapping for v0:
 
 - `claude-code`: `<executable> -p <prompt>`

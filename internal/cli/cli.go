@@ -43,6 +43,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runBrief(args[2:], stdout, stderr)
 	case "run":
 		return runRun(args[2:], stdout, stderr)
+	case "learn":
+		return runLearn(args[2:], stdout, stderr)
 	case "propose":
 		return runPropose(args[2:], stdout, stderr)
 	case "review":
@@ -66,6 +68,7 @@ Usage:
   sima doctor [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
+  sima learn --backend <name> --task <task> [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -80,6 +83,7 @@ Current v0 slice:
   doctor   Check SIMA project state and local runtime prerequisites
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
+  learn    Run the full gated self-improvement loop: run, propose, archivist, apply
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
   apply    Promote an approved safe personal proposal into active memory/skills
@@ -260,6 +264,98 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Next: sima review --path %s\n", abs)
 		fmt.Fprintf(stdout, "Next: sima archivist --proposal %s --path %s\n", filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml")), abs)
 	}
+	return 0
+}
+
+func runLearn(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	backendName := ""
+	task := ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--backend":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--backend requires a value")
+				return 2
+			}
+			i++
+			backendName = args[i]
+		case "--task":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--task requires a value")
+				return 2
+			}
+			i++
+			task = args[i]
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+			return 2
+		}
+	}
+	if backendName == "" || task == "" {
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+
+	runResult, err := runner.Run(abs, runner.Options{BackendName: backendName, Task: task})
+	if err != nil {
+		fmt.Fprintf(stderr, "learn run failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Run %s complete: %s\n", runResult.RunID, runResult.RunDir)
+	fmt.Fprintf(stdout, "Exit code: %d\n", runResult.ExitCode)
+	if runResult.ExitCode != 0 {
+		fmt.Fprintln(stdout, "Learn stopped: run failed; no proposal, archivist decision, or apply attempted")
+		return 1
+	}
+
+	proposalResult, err := proposal.Generate(abs, proposal.Options{FromRun: runResult.RunID})
+	if err != nil {
+		fmt.Fprintf(stderr, "learn propose failed: %v\n", err)
+		return 1
+	}
+	proposalID := filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml"))
+	fmt.Fprintf(stdout, "Proposal written: %s\n", proposalResult.Path)
+	fmt.Fprintf(stdout, "Candidates: %d\n", proposalResult.Candidates)
+	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
+
+	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID})
+	if err != nil {
+		fmt.Fprintf(stderr, "learn archivist failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Archivist decision: %s\n", archivistResult.Decision)
+	for _, note := range archivistResult.Notes {
+		fmt.Fprintf(stdout, "  - %s\n", note)
+	}
+	if archivistResult.Decision != "apply" {
+		fmt.Fprintf(stdout, "Learn stopped: archivist decision is %s; no apply attempted\n", archivistResult.Decision)
+		return 0
+	}
+
+	applyResult, err := apply.Apply(abs, apply.Options{Target: proposalID})
+	if err != nil {
+		fmt.Fprintf(stderr, "learn apply failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Applied proposal: %s\n", applyResult.ProposalPath)
+	for _, path := range applyResult.Applied {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
+	fmt.Fprintln(stdout, "Learn complete: applied safe approved knowledge")
 	return 0
 }
 
