@@ -51,6 +51,8 @@ type Proposal struct {
 	Evidence           []Evidence       `yaml:"evidence"`
 	CreatedAt          string           `yaml:"created_at"`
 	AppliedAt          string           `yaml:"applied_at,omitempty"`
+	ArchivistAt        string           `yaml:"archivist_at,omitempty"`
+	ArchivistNotes     []string         `yaml:"archivist_notes,omitempty"`
 	ReviewInstructions []string         `yaml:"review_instructions"`
 }
 

@@ -137,6 +137,18 @@ v0 gates are intentionally strict:
 
 When gates pass, SIMA writes candidate memories to `.sima/personal/memory/cards/*.yaml`, candidate skills to `.sima/personal/skills/active/*.md`, and marks the source proposal `status: applied` with `applied_at`.
 
+## Archivist decision
+
+`sima archivist --proposal <proposal-id|path> [--path <path>]` is the deterministic v0 clean-checker gate. It updates `archivist_decision`, `archivist_at`, and `archivist_notes` on the source proposal.
+
+Decision rules:
+
+- `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one candidate memory/skill, and no active output file conflict exists.
+- `reject`: proposal is invalid, suspicious/unsafe, or has no candidates.
+- `defer`: proposal is outside v0 auto-approval scope or needs manual dedup/update because an active output already exists.
+
+`apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:

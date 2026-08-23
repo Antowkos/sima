@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/antowkos/sima/internal/apply"
+	"github.com/antowkos/sima/internal/archivist"
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
@@ -48,6 +49,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runReview(args[2:], stdout, stderr)
 	case "apply":
 		return runApply(args[2:], stdout, stderr)
+	case "archivist":
+		return runArchivist(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -66,6 +69,7 @@ Usage:
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
+  sima archivist --proposal <proposal-id|path> [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -79,6 +83,7 @@ Current v0 slice:
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
   apply    Promote an approved safe personal proposal into active memory/skills
+  archivist Decide apply/reject/defer for a candidate proposal with deterministic gates
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -386,6 +391,53 @@ func runApply(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Applied proposal: %s\n", result.ProposalPath)
 	for _, path := range result.Applied {
 		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
+	return 0
+}
+
+func runArchivist(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	target := ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--proposal":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--proposal requires a value")
+				return 2
+			}
+			i++
+			target = args[i]
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+			return 2
+		}
+	}
+	if target == "" {
+		fmt.Fprintln(stderr, "usage: sima archivist --proposal <proposal-id|path> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := archivist.Decide(abs, archivist.Options{Target: target})
+	if err != nil {
+		fmt.Fprintf(stderr, "archivist failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Archivist decision: %s\n", result.Decision)
+	fmt.Fprintf(stdout, "Proposal: %s\n", result.ProposalPath)
+	for _, note := range result.Notes {
+		fmt.Fprintf(stdout, "  - %s\n", note)
 	}
 	return 0
 }
