@@ -136,10 +136,23 @@ func decideLearning(p proposal.Proposal) (string, []string, bool) {
 
 func activeConflicts(projectRoot string, p proposal.Proposal) []string {
 	var conflicts []string
+	activeMemory := readActiveMemory(projectRoot)
+	activeSkills := readActiveSkills(projectRoot)
 	for i, c := range p.CandidateMemories {
 		path := filepath.Join(projectRoot, ".sima", "personal", "memory", "cards", uniqueID(p.ID, c.Title, i)+".yaml")
 		if _, err := os.Stat(path); err == nil {
 			conflicts = append(conflicts, rel(projectRoot, path))
+		}
+		candidateTitle := slug(c.Title)
+		candidateTrigger := slug(c.Trigger)
+		for _, active := range activeMemory {
+			if candidateTitle != "" && candidateTitle == active.TitleSlug {
+				conflicts = append(conflicts, fmt.Sprintf("similar active memory title exists: %s", active.Path))
+				continue
+			}
+			if candidateTrigger != "" && candidateTrigger == active.TriggerSlug {
+				conflicts = append(conflicts, fmt.Sprintf("similar active memory trigger exists: %s", active.Path))
+			}
 		}
 	}
 	for i, c := range p.CandidateSkills {
@@ -147,8 +160,102 @@ func activeConflicts(projectRoot string, p proposal.Proposal) []string {
 		if _, err := os.Stat(path); err == nil {
 			conflicts = append(conflicts, rel(projectRoot, path))
 		}
+		candidateName := slug(c.Name)
+		candidateTrigger := slug(c.Trigger)
+		for _, active := range activeSkills {
+			if candidateName != "" && candidateName == active.NameSlug {
+				conflicts = append(conflicts, fmt.Sprintf("similar active skill name exists: %s", active.Path))
+				continue
+			}
+			if candidateTrigger != "" && candidateTrigger == active.TriggerSlug {
+				conflicts = append(conflicts, fmt.Sprintf("similar active skill trigger exists: %s", active.Path))
+			}
+		}
 	}
 	return conflicts
+}
+
+type activeMemoryRef struct {
+	Path        string
+	TitleSlug   string
+	TriggerSlug string
+}
+
+type activeSkillRef struct {
+	Path        string
+	NameSlug    string
+	TriggerSlug string
+}
+
+func readActiveMemory(projectRoot string) []activeMemoryRef {
+	dir := filepath.Join(projectRoot, ".sima", "personal", "memory", "cards")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var refs []activeMemoryRef
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAML(entry.Name()) {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var card struct {
+			Title   string `yaml:"title"`
+			Trigger string `yaml:"trigger"`
+			Status  string `yaml:"status"`
+		}
+		if err := yaml.Unmarshal(data, &card); err != nil || card.Status == "archived" || card.Status == "deprecated" {
+			continue
+		}
+		refs = append(refs, activeMemoryRef{Path: rel(projectRoot, path), TitleSlug: slug(card.Title), TriggerSlug: slug(card.Trigger)})
+	}
+	return refs
+}
+
+func readActiveSkills(projectRoot string) []activeSkillRef {
+	dir := filepath.Join(projectRoot, ".sima", "personal", "skills", "active")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var refs []activeSkillRef
+	for _, entry := range entries {
+		if entry.IsDir() || strings.ToLower(filepath.Ext(entry.Name())) != ".md" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		refs = append(refs, activeSkillRef{Path: rel(projectRoot, path), NameSlug: slug(name), TriggerSlug: slug(extractSkillTrigger(string(data)))})
+	}
+	return refs
+}
+
+func extractSkillTrigger(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "## Trigger" {
+			for _, candidate := range lines[i+1:] {
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" && !strings.HasPrefix(candidate, "#") {
+					return candidate
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func isYAML(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".yaml" || ext == ".yml"
 }
 
 func resolveProposal(projectRoot, target string) (string, error) {

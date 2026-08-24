@@ -2,6 +2,7 @@ package archivist
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,67 @@ func TestDecideDefersFailedLearningQuality(t *testing.T) {
 	}
 }
 
+func TestDecideDefersSimilarActiveMemory(t *testing.T) {
+	root, proposalPath := createProposal(t, "archive duplicate proposal", false)
+	activeDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
+	if err := os.MkdirAll(activeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	active := `id: existing
+status: active
+type: workflow
+title: Structured archivist approval
+trigger: When a worker emits structured proposed_memory.
+summary: Existing active card with the same durable lesson.
+`
+	if err := os.WriteFile(filepath.Join(activeDir, "existing.yaml"), []byte(active), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Decide(root, Options{Target: proposalPath})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	joined := strings.Join(result.Notes, "\n")
+	if result.Decision != "defer" || !strings.Contains(joined, "similar active memory") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: deferred") || !strings.Contains(string(data), "manual dedup/update needed") {
+		t.Fatalf("proposal not deferred for dedup:\n%s", data)
+	}
+}
+
+func TestDecideDefersSimilarActiveSkill(t *testing.T) {
+	root, proposalPath := createSkillProposal(t)
+	activeDir := filepath.Join(root, ".sima", "personal", "skills", "active")
+	if err := os.MkdirAll(activeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	active := `---
+name: structured-proposal-skill
+---
+# structured-proposal-skill
+
+## Trigger
+
+When a worker emits structured proposed_skills.
+`
+	if err := os.WriteFile(filepath.Join(activeDir, "structured-proposal-skill.md"), []byte(active), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Decide(root, Options{Target: proposalPath})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	joined := strings.Join(result.Notes, "\n")
+	if result.Decision != "defer" || !strings.Contains(joined, "similar active skill") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
 func createProposal(t *testing.T, task string, suspicious bool) (string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -148,6 +210,31 @@ func createProposal(t *testing.T, task string, suspicious bool) (string, string)
 		if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	proposalResult, err := proposal.Generate(root, proposal.Options{FromRun: runResult.RunID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	return root, proposalResult.Path
+}
+
+func createSkillProposal(t *testing.T) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if err := config.AddBackend(root, "worker", config.BackendProfile{Kind: "codex", Executable: "/bin/echo"}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+	runResult, err := runner.Run(root, runner.Options{BackendName: "worker", Task: "skill proposal", Now: time.Date(2026, 8, 23, 12, 30, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reportPath := root + "/.sima/personal/runs/" + runResult.RunID + "/worker-report.yaml"
+	report := "run_id: " + runResult.RunID + "\nstatus: success\nexit_code: 0\ntask: skill proposal\nproposed_skills:\n  - name: structured-proposal-skill\n    trigger: When a worker emits structured proposed_skills.\n    summary: Convert worker-proposed skills into reusable active skill files with evidence.\n"
+	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	proposalResult, err := proposal.Generate(root, proposal.Options{FromRun: runResult.RunID})
 	if err != nil {

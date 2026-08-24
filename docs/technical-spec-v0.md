@@ -172,7 +172,7 @@ learning:
   notes: []
 ```
 
-This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary. The archivist uses this boundary: only `memory`, `skill`, and `mixed` destinations with passing quality flags can auto-apply.
+This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary. The archivist uses this boundary: only `memory`, `skill`, and `mixed` destinations with passing quality flags can auto-apply, and similar active knowledge defers to an explicit update/supersede decision instead of creating a duplicate.
 
 ## Proposal review
 
@@ -222,7 +222,9 @@ Decision rules:
 
 - `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one structured candidate memory/skill, `learning.destination` is `memory`, `skill`, or `mixed`, all learning quality flags pass, and no active output file conflict exists.
 - `reject`: proposal is invalid, suspicious/unsafe, has no candidates, or has `learning.destination: reject`.
-- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback/session-only review candidate, fails learning quality, or needs manual dedup/update because an active output already exists.
+- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback/session-only review candidate, fails learning quality, has a similar active memory/skill that should be handled as update/supersede, or needs manual dedup/update because an active output already exists.
+
+The v0 dedup gate is conservative and deterministic. For `create` proposals it compares candidate memory title/trigger and skill name/trigger against active personal cards/skills. Similar active knowledge blocks auto-apply with a note pointing at the active item; later librarian slices can turn those deferred candidates into `update`, `supersede`, or `deprecate` operations.
 
 When the archivist defers fallback/session-only learning it marks the proposal `status: session_only`; other deferred proposals become `status: deferred`, and rejected proposals become `status: rejected`. `apply` decisions leave the proposal as `candidate` until `sima apply` performs the mutation and marks it `applied`.
 
