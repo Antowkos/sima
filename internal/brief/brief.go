@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -47,14 +49,14 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		Task:                   opts.Task,
 		GeneratedAt:            opts.Now.UTC().Format(time.RFC3339),
 		SystemSkills:           listFiles(filepath.Join(simaRoot, "system", "skills"), projectRoot, []string{".md"}),
-		PersonalMemory:         listFiles(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		PersonalMemorySnippets: readSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		PersonalSkills:         listFiles(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
-		PersonalSkillSnippets:  readSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
-		TeamMemory:             listFiles(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		TeamMemorySnippets:     readSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		TeamSkills:             listFiles(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
-		TeamSkillSnippets:      readSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
+		PersonalMemory:         listActiveFiles(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
+		PersonalMemorySnippets: readActiveSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
+		PersonalSkills:         listActiveFiles(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
+		PersonalSkillSnippets:  readActiveSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
+		TeamMemory:             listActiveFiles(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
+		TeamMemorySnippets:     readActiveSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
+		TeamSkills:             listActiveFiles(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
+		TeamSkillSnippets:      readActiveSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
 		SDDArtifacts:           findSDDArtifacts(projectRoot),
 	}
 	content := render(data)
@@ -139,6 +141,18 @@ func listFiles(root, projectRoot string, exts []string) []string {
 	return items
 }
 
+func listActiveFiles(root, projectRoot string, exts []string) []string {
+	paths := listFiles(root, projectRoot, exts)
+	active := paths[:0]
+	for _, relPath := range paths {
+		abs := filepath.Join(projectRoot, filepath.FromSlash(relPath))
+		if activeKnowledgeFile(abs) {
+			active = append(active, relPath)
+		}
+	}
+	return active
+}
+
 func readSnippets(root, projectRoot string, exts []string) []snippet {
 	paths := listFiles(root, projectRoot, exts)
 	if len(paths) > maxSnippetItems {
@@ -158,6 +172,67 @@ func readSnippets(root, projectRoot string, exts []string) []snippet {
 		items = append(items, snippet{Path: relPath, Content: content})
 	}
 	return items
+}
+
+func readActiveSnippets(root, projectRoot string, exts []string) []snippet {
+	paths := listActiveFiles(root, projectRoot, exts)
+	if len(paths) > maxSnippetItems {
+		paths = paths[:maxSnippetItems]
+	}
+	items := make([]snippet, 0, len(paths))
+	for _, relPath := range paths {
+		abs := filepath.Join(projectRoot, filepath.FromSlash(relPath))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		content := strings.TrimSpace(string(data))
+		if len(content) > maxSnippetBytes {
+			content = strings.TrimSpace(content[:maxSnippetBytes]) + "\n... [truncated]"
+		}
+		items = append(items, snippet{Path: relPath, Content: content})
+	}
+	return items
+}
+
+func activeKnowledgeFile(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	status := statusFromContent(path, string(data))
+	return status == "" || status == "active"
+}
+
+func statusFromContent(path, content string) string {
+	if hasExt(path, []string{".yaml", ".yml"}) {
+		var meta struct {
+			Status string `yaml:"status"`
+		}
+		if err := yaml.Unmarshal([]byte(content), &meta); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(strings.ToLower(meta.Status))
+	}
+	return strings.TrimSpace(strings.ToLower(frontmatterValue(content, "status")))
+}
+
+func frontmatterValue(content, key string) string {
+	if !strings.HasPrefix(content, "---\n") {
+		return ""
+	}
+	parts := strings.SplitN(content, "\n---\n", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	prefix := key + ":"
+	for _, line := range strings.Split(parts[0], "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
 }
 
 func findSDDArtifacts(projectRoot string) []string {

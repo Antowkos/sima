@@ -243,6 +243,8 @@ When the archivist defers fallback/session-only learning it marks the proposal `
 
 `apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
 
+`brief` is lifecycle-aware: it reads active memory/skills only. Items with `status: deprecated`, `status: superseded`, or `status: archived` remain on disk as history but are excluded from retrieved task context.
+
 ## Archivist contract
 
 The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:
