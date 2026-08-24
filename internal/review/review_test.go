@@ -65,3 +65,50 @@ func TestReviewReportsInvalidProposal(t *testing.T) {
 		}
 	}
 }
+
+func TestReviewReportsLowQualityMemoryCandidate(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	path := filepath.Join(root, ".sima", "personal", "memory", "candidates", "low-quality.yaml")
+	data := `version: 1
+id: low-quality
+kind: run_reflection
+scope: personal
+operation: create
+status: candidate
+archivist_decision: defer
+safety:
+  decision: safe
+run:
+  id: run-1
+  path: .sima/personal/runs/run-1
+  status: success
+evidence:
+  - kind: stdout
+    path: .sima/personal/runs/run-1/stdout.log
+candidate_source: structured
+candidate_memories:
+  - type: note
+    title: Pushed today's fix
+    trigger: Remember this
+    summary: PR #123 was pushed today.
+    evidence:
+      - kind: stdout
+        path: .sima/personal/runs/run-1/stdout.log
+`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Review(root, Options{})
+	if err != nil {
+		t.Fatalf("Review() error = %v", err)
+	}
+	joined := strings.Join(result.Items[0].Problems, "\n")
+	for _, want := range []string{"type must be", "trigger must describe when", "summary must be", "transient task progress"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("problems missing %q: %s", want, joined)
+		}
+	}
+}

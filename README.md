@@ -8,6 +8,8 @@ Generated briefs include bounded snippets from active memory cards and skills, s
 
 For Claude Code backends, set `metadata.output_format: json_schema` to run with Claude's native `--output-format json --json-schema` mode; SIMA extracts the validated `structured_output` wrapper field.
 
+Review gates follow Hermes-style learning hygiene: durable memory must be compact, triggerable, evidence-backed, and not transient task progress; skills must describe reusable workflows rather than one-off run summaries.
+
 ## Current slice
 
 ```bash

@@ -127,6 +127,7 @@ func validate(p proposal.Proposal) []string {
 		if strings.TrimSpace(c.Type) == "" || strings.TrimSpace(c.Title) == "" || strings.TrimSpace(c.Trigger) == "" || strings.TrimSpace(c.Summary) == "" {
 			problems = append(problems, fmt.Sprintf("candidate_memories[%d] requires type, title, trigger, and summary", i))
 		}
+		problems = append(problems, validateMemoryQuality(i, c)...)
 		if len(c.Evidence) == 0 {
 			problems = append(problems, fmt.Sprintf("candidate_memories[%d] missing evidence", i))
 		}
@@ -135,6 +136,7 @@ func validate(p proposal.Proposal) []string {
 		if strings.TrimSpace(c.Name) == "" || strings.TrimSpace(c.Trigger) == "" || strings.TrimSpace(c.Summary) == "" {
 			problems = append(problems, fmt.Sprintf("candidate_skills[%d] requires name, trigger, and summary", i))
 		}
+		problems = append(problems, validateSkillQuality(i, c)...)
 		if len(c.Evidence) == 0 {
 			problems = append(problems, fmt.Sprintf("candidate_skills[%d] missing evidence", i))
 		}
@@ -143,6 +145,61 @@ func validate(p proposal.Proposal) []string {
 		problems = append(problems, "suspicious/unsafe proposals cannot be apply")
 	}
 	return problems
+}
+
+func validateMemoryQuality(i int, c proposal.Candidate) []string {
+	var problems []string
+	if !oneOf(strings.TrimSpace(c.Type), []string{"decision", "invariant", "gotcha", "workflow", "guardrail", "anti_pattern", "open_question"}) {
+		problems = append(problems, fmt.Sprintf("candidate_memories[%d] type must be decision, invariant, gotcha, workflow, guardrail, anti_pattern, or open_question", i))
+	}
+	trigger := strings.TrimSpace(c.Trigger)
+	summary := strings.TrimSpace(c.Summary)
+	if len(trigger) < 20 || !looksTriggerable(trigger) {
+		problems = append(problems, fmt.Sprintf("candidate_memories[%d] trigger must describe when to recall it", i))
+	}
+	if len(summary) < 40 {
+		problems = append(problems, fmt.Sprintf("candidate_memories[%d] summary must be a compact durable lesson", i))
+	}
+	if containsTransientLesson(c.Title + "\n" + trigger + "\n" + summary) {
+		problems = append(problems, fmt.Sprintf("candidate_memories[%d] looks like transient task progress, not durable memory", i))
+	}
+	return problems
+}
+
+func validateSkillQuality(i int, c proposal.CandidateSkill) []string {
+	var problems []string
+	name := strings.TrimSpace(c.Name)
+	trigger := strings.TrimSpace(c.Trigger)
+	summary := strings.TrimSpace(c.Summary)
+	if name != strings.ToLower(name) || strings.Contains(name, " ") {
+		problems = append(problems, fmt.Sprintf("candidate_skills[%d] name must be lowercase kebab/underscore style", i))
+	}
+	if len(trigger) < 20 || !looksTriggerable(trigger) {
+		problems = append(problems, fmt.Sprintf("candidate_skills[%d] trigger must describe when to use the reusable workflow", i))
+	}
+	if len(summary) < 40 {
+		problems = append(problems, fmt.Sprintf("candidate_skills[%d] summary must describe a reusable procedure", i))
+	}
+	if containsTransientLesson(name + "\n" + trigger + "\n" + summary) {
+		problems = append(problems, fmt.Sprintf("candidate_skills[%d] looks like transient task progress, not a reusable skill", i))
+	}
+	return problems
+}
+
+func looksTriggerable(text string) bool {
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "when ") || strings.Contains(lower, "when_") || strings.Contains(lower, "if ") || strings.Contains(lower, "before ") || strings.Contains(lower, "after ") || strings.Contains(lower, "while ") || strings.Contains(lower, "during ")
+}
+
+func containsTransientLesson(text string) bool {
+	lower := strings.ToLower(text)
+	transient := []string{"commit ", "committed ", "pushed ", "pr #", "pull request", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
+	for _, marker := range transient {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func oneOf(value string, allowed []string) bool {

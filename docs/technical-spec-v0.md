@@ -160,12 +160,23 @@ The v0 proposal is intentionally conservative:
 
 `sima review [--path <path>] [--all]` reads personal candidate proposals, validates their structure, and prints a compact review queue summary.
 
+SIMA borrows the useful parts of Hermes' learning model for quality control:
+
+- separate always-on memory from on-demand procedural skills;
+- keep active memory compact, triggerable, and evidence-backed;
+- prefer session/run search for transient history instead of saving task progress;
+- stage or defer questionable learning before it affects future runs;
+- treat skills as reusable workflows, not one-off task summaries.
+
 The v0 review gate marks an item blocked when:
 
 - required fields are missing;
 - proposal operation/status/decision/safety values are unsupported;
 - evidence pointers are missing or malformed;
 - candidate memories/skills lack triggerable summaries or evidence;
+- candidate memory type is not one of `decision`, `invariant`, `gotcha`, `workflow`, `guardrail`, `anti_pattern`, or `open_question`;
+- candidate triggers do not say when to recall/use the item;
+- candidate content looks like transient task progress such as commits, PRs, issue numbers, or run completion notes;
 - a suspicious/unsafe proposal asks to `apply`.
 
 Without `--all`, review only shows proposals with `status: candidate`.
