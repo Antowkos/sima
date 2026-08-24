@@ -88,3 +88,20 @@ func TestRunRequiresConfiguredBackend(t *testing.T) {
 		t.Fatal("expected missing backend error")
 	}
 }
+
+func TestBuildArgsAddsClaudeJSONSchemaMode(t *testing.T) {
+	profile := config.BackendProfile{Kind: "claude-code", Metadata: map[string]string{"output_format": "json_schema"}}
+	args := buildArgs(profile, "do task")
+	want := []string{"-p", "--output-format", "json", "--json-schema"}
+	for i, value := range want {
+		if args[i] != value {
+			t.Fatalf("args[%d] = %q, want %q; args=%v", i, args[i], value, args)
+		}
+	}
+	if !strings.Contains(args[4], "proposed_memory") || !strings.Contains(args[4], "required") {
+		t.Fatalf("json schema missing proposal fields: %s", args[4])
+	}
+	if args[len(args)-1] != "do task" {
+		t.Fatalf("prompt arg = %q, want do task; args=%v", args[len(args)-1], args)
+	}
+}

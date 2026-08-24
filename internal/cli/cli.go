@@ -583,7 +583,7 @@ func runBackend(args []string, stdout, stderr io.Writer) int {
 func printBackendHelp(w io.Writer) {
 	fmt.Fprintln(w, `Usage:
   sima backend list [path]
-  sima backend add <name> --kind <claude-code|codex> --executable <path> [--config <path>] [--env-file <path>] [--working-dir <path>] [--permission-mode <mode>] [--force]
+  sima backend add <name> --kind <claude-code|codex> --executable <path> [--config <path>] [--env-file <path>] [--working-dir <path>] [--permission-mode <mode>] [--metadata KEY=VALUE] [--force]
   sima backend doctor <name> [path]`)
 }
 
@@ -685,6 +685,17 @@ func runBackendAdd(args []string, stdout, stderr io.Writer) int {
 			i++
 			parts := strings.SplitN(args[i], "=", 2)
 			profile.Env[parts[0]] = parts[1]
+		case "--metadata":
+			if i+1 >= len(args) || !strings.Contains(args[i+1], "=") {
+				fmt.Fprintln(stderr, "--metadata requires KEY=VALUE")
+				return 2
+			}
+			i++
+			if profile.Metadata == nil {
+				profile.Metadata = map[string]string{}
+			}
+			parts := strings.SplitN(args[i], "=", 2)
+			profile.Metadata[parts[0]] = parts[1]
 		case "--path":
 			if i+1 >= len(args) {
 				fmt.Fprintln(stderr, "--path requires a value")

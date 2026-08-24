@@ -27,16 +27,17 @@ type Result struct {
 }
 
 type WorkerReport struct {
-	RunID          string           `yaml:"run_id" json:"run_id,omitempty"`
-	Backend        string           `yaml:"backend" json:"backend,omitempty"`
-	Status         string           `yaml:"status" json:"status,omitempty"`
-	Task           string           `yaml:"task" json:"task,omitempty"`
-	BriefPath      string           `yaml:"brief_path" json:"brief_path,omitempty"`
-	ExitCode       int              `yaml:"exit_code" json:"exit_code,omitempty"`
-	StdoutPath     string           `yaml:"stdout_path" json:"stdout_path,omitempty"`
-	StderrPath     string           `yaml:"stderr_path" json:"stderr_path,omitempty"`
-	ProposedMemory []Candidate      `yaml:"proposed_memory,omitempty" json:"proposed_memory,omitempty"`
-	ProposedSkills []CandidateSkill `yaml:"proposed_skills,omitempty" json:"proposed_skills,omitempty"`
+	RunID            string           `yaml:"run_id" json:"run_id,omitempty"`
+	Backend          string           `yaml:"backend" json:"backend,omitempty"`
+	Status           string           `yaml:"status" json:"status,omitempty"`
+	Task             string           `yaml:"task" json:"task,omitempty"`
+	BriefPath        string           `yaml:"brief_path" json:"brief_path,omitempty"`
+	ExitCode         int              `yaml:"exit_code" json:"exit_code,omitempty"`
+	StdoutPath       string           `yaml:"stdout_path" json:"stdout_path,omitempty"`
+	StderrPath       string           `yaml:"stderr_path" json:"stderr_path,omitempty"`
+	ProposedMemory   []Candidate      `yaml:"proposed_memory,omitempty" json:"proposed_memory,omitempty"`
+	ProposedSkills   []CandidateSkill `yaml:"proposed_skills,omitempty" json:"proposed_skills,omitempty"`
+	StructuredOutput *WorkerReport    `yaml:"-" json:"structured_output,omitempty"`
 }
 
 type Proposal struct {
@@ -249,6 +250,9 @@ func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 	}
 	if strings.HasPrefix(text, "{") {
 		if err := json.Unmarshal([]byte(text), &report); err == nil {
+			if report.StructuredOutput != nil {
+				return *report.StructuredOutput, parseResult{Structured: true}
+			}
 			return report, parseResult{Structured: true}
 		}
 		return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout looks like JSON but is not valid JSON"}}

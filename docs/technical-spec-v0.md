@@ -107,6 +107,7 @@ It stops without applying when the worker run fails, proposal generation fails, 
 Backend command mapping for v0:
 
 - `claude-code`: `<executable> -p <prompt>`
+- `claude-code` with `metadata.output_format: json_schema`: `<executable> -p --output-format json --json-schema <schema> <prompt>`; SIMA reads Claude Code's `structured_output` wrapper field when present;
 - `codex`: `<executable> exec <prompt>`
 
 ## Proposal generation

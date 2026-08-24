@@ -195,13 +195,52 @@ Do not propose transient task progress, raw logs, PR/issue status, or lessons fr
 func buildArgs(profile config.BackendProfile, prompt string) []string {
 	switch profile.Kind {
 	case "claude-code":
-		return []string{"-p", prompt}
+		args := []string{"-p"}
+		if profile.Metadata["output_format"] == "json_schema" {
+			args = append(args, "--output-format", "json", "--json-schema", workerJSONSchema)
+		}
+		return append(args, prompt)
 	case "codex":
 		return []string{"exec", prompt}
 	default:
 		return []string{prompt}
 	}
 }
+
+const workerJSONSchema = `{
+  "type": "object",
+  "properties": {
+    "status": {"type": "string"},
+    "proposed_memory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "title": {"type": "string"},
+          "trigger": {"type": "string"},
+          "summary": {"type": "string"}
+        },
+        "required": ["type", "title", "trigger", "summary"],
+        "additionalProperties": false
+      }
+    },
+    "proposed_skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "trigger": {"type": "string"},
+          "summary": {"type": "string"}
+        },
+        "required": ["name", "trigger", "summary"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}`
 
 func runCommand(cmd *exec.Cmd) ([]byte, []byte, int) {
 	var exitCode int
