@@ -125,6 +125,14 @@ func validate(p proposal.Proposal) []string {
 	if p.Learning.Operation != "" && !oneOf(p.Learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
 		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
 	}
+	if oneOf(p.Learning.Operation, []string{"update", "deprecate", "supersede"}) {
+		if strings.TrimSpace(p.Learning.Target.Path) == "" {
+			problems = append(problems, "learning.target.path is required for update, deprecate, or supersede")
+		}
+		if !oneOf(p.Learning.Target.Kind, []string{"memory", "skill"}) {
+			problems = append(problems, "learning.target.kind must be memory or skill")
+		}
+	}
 	for _, problem := range p.CandidateErrors {
 		problems = append(problems, "candidate error: "+problem)
 	}

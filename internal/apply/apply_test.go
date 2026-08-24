@@ -11,6 +11,7 @@ import (
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
+	"gopkg.in/yaml.v3"
 )
 
 func TestApplyPromotesSafeApprovedProposal(t *testing.T) {
@@ -51,6 +52,89 @@ func TestApplyRequiresArchivistApply(t *testing.T) {
 	}
 }
 
+func TestApplyUpdatesTargetMemory(t *testing.T) {
+	root, proposalPath := createProposal(t)
+	target := writeExistingMemory(t, root, "existing", "Old title", "Old summary")
+	mutateProposal(t, proposalPath, func(p *proposal.Proposal) {
+		p.ArchivistDecision = "apply"
+		p.Learning.Operation = "update"
+		p.Learning.Target = proposal.LearningTarget{Kind: "memory", Path: target, ID: "existing"}
+	})
+
+	result, err := Apply(root, Options{Target: proposalPath, Now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(result.Applied) != 1 || result.Applied[0] != target {
+		t.Fatalf("applied = %#v, want target %s", result.Applied, target)
+	}
+	data, err := os.ReadFile(filepath.Join(root, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "title: Apply approved structured proposal") || !strings.Contains(text, "status: active") || !strings.Contains(text, "proposal_id:") {
+		t.Fatalf("target memory not updated:\n%s", text)
+	}
+}
+
+func TestApplySupersedesTargetMemory(t *testing.T) {
+	root, proposalPath := createProposal(t)
+	target := writeExistingMemory(t, root, "existing", "Old title", "Old summary")
+	mutateProposal(t, proposalPath, func(p *proposal.Proposal) {
+		p.ArchivistDecision = "apply"
+		p.Learning.Operation = "supersede"
+		p.Learning.Target = proposal.LearningTarget{Kind: "memory", Path: target, ID: "existing"}
+	})
+
+	result, err := Apply(root, Options{Target: proposalPath, Now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(result.Applied) != 2 {
+		t.Fatalf("applied = %#v, want old target plus new card", result.Applied)
+	}
+	oldData, err := os.ReadFile(filepath.Join(root, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(oldData), "status: superseded") {
+		t.Fatalf("target not superseded:\n%s", oldData)
+	}
+	newData, err := os.ReadFile(filepath.Join(root, result.Applied[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(newData), "status: active") || !strings.Contains(string(newData), "Apply approved structured proposal") {
+		t.Fatalf("new card not created:\n%s", newData)
+	}
+}
+
+func TestApplyDeprecatesTargetMemory(t *testing.T) {
+	root, proposalPath := createProposal(t)
+	target := writeExistingMemory(t, root, "existing", "Old title", "Old summary")
+	mutateProposal(t, proposalPath, func(p *proposal.Proposal) {
+		p.ArchivistDecision = "apply"
+		p.Learning.Operation = "deprecate"
+		p.Learning.Target = proposal.LearningTarget{Kind: "memory", Path: target, ID: "existing"}
+	})
+
+	result, err := Apply(root, Options{Target: proposalPath, Now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(result.Applied) != 1 || result.Applied[0] != target {
+		t.Fatalf("applied = %#v, want target %s", result.Applied, target)
+	}
+	data, err := os.ReadFile(filepath.Join(root, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: deprecated") {
+		t.Fatalf("target not deprecated:\n%s", data)
+	}
+}
+
 func createProposal(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -86,4 +170,52 @@ func approveProposal(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func mutateProposal(t *testing.T, path string, mutate func(*proposal.Proposal)) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p proposal.Proposal
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		t.Fatal(err)
+	}
+	mutate(&p)
+	updated, err := yaml.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeExistingMemory(t *testing.T, root, id, title, summary string) string {
+	t.Helper()
+	relPath := filepath.Join(".sima", "personal", "memory", "cards", id+".yaml")
+	absPath := filepath.Join(root, relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	card := ActiveMemoryCard{
+		ID:        id,
+		Type:      "workflow",
+		Title:     title,
+		Trigger:   "When testing operation-aware apply.",
+		Summary:   summary,
+		Status:    "active",
+		Scope:     "personal",
+		CreatedAt: "2026-08-22T12:00:00Z",
+		UpdatedAt: "2026-08-22T12:00:00Z",
+	}
+	data, err := yaml.Marshal(card)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.ToSlash(relPath)
 }

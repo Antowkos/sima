@@ -163,6 +163,10 @@ The persisted learning classification is intentionally small:
 learning:
   destination: memory | skill | mixed | session_only | reject
   operation: create | update | deprecate | supersede
+  target:
+    kind: memory | skill
+    path: .sima/personal/memory/cards/example.yaml
+    id: optional-existing-id
   quality:
     durable: true
     triggerable: true
@@ -225,6 +229,15 @@ Decision rules:
 - `defer`: proposal is outside v0 auto-approval scope, contains only a fallback/session-only review candidate, fails learning quality, has a similar active memory/skill that should be handled as update/supersede, or needs manual dedup/update because an active output already exists.
 
 The v0 dedup gate is conservative and deterministic. For `create` proposals it compares candidate memory title/trigger and skill name/trigger against active personal cards/skills. Similar active knowledge blocks auto-apply with a note pointing at the active item; later librarian slices can turn those deferred candidates into `update`, `supersede`, or `deprecate` operations.
+
+Operation-aware apply rules:
+
+- `create`: create new active memory cards and/or skills.
+- `update`: require `learning.target.kind/path`; rewrite the targeted memory card or skill using exactly one candidate of the same kind while preserving the target identity/path.
+- `supersede`: require `learning.target.kind/path`; mark the target `superseded`, then create new active output from the candidate.
+- `deprecate`: require `learning.target.kind/path`; mark the target `deprecated` without creating new active output.
+
+Targets must resolve under the project root. This makes lifecycle operations explicit and prevents update/supersede from relying on fuzzy dedup heuristics at mutation time.
 
 When the archivist defers fallback/session-only learning it marks the proposal `status: session_only`; other deferred proposals become `status: deferred`, and rejected proposals become `status: rejected`. `apply` decisions leave the proposal as `candidate` until `sima apply` performs the mutation and marks it `applied`.
 

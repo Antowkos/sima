@@ -80,25 +80,45 @@ func Apply(projectRoot string, opts Options) (Result, error) {
 	if p.Learning.Destination != "" && !learningQualityPasses(p.Learning.Quality) {
 		return Result{}, fmt.Errorf("proposal learning quality gate did not pass")
 	}
-	if len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
+	op := learningOperation(p)
+	if op != "deprecate" && len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
 		return Result{}, fmt.Errorf("proposal has no candidate memories or skills")
 	}
 
 	var applied []string
 	stamp := opts.Now.UTC().Format(time.RFC3339)
-	for i, c := range p.CandidateMemories {
-		path, err := writeMemory(projectRoot, proposalPath, p, c, i, stamp)
+	switch op {
+	case "create":
+		paths, err := createOutputs(projectRoot, proposalPath, p, stamp)
+		if err != nil {
+			return Result{}, err
+		}
+		applied = append(applied, paths...)
+	case "update":
+		path, err := updateTarget(projectRoot, proposalPath, p, stamp)
 		if err != nil {
 			return Result{}, err
 		}
 		applied = append(applied, path)
-	}
-	for i, c := range p.CandidateSkills {
-		path, err := writeSkill(projectRoot, proposalPath, p, c, i, stamp)
+	case "supersede":
+		path, err := markTargetStatus(projectRoot, p.Learning.Target, "superseded", stamp)
 		if err != nil {
 			return Result{}, err
 		}
 		applied = append(applied, path)
+		paths, err := createOutputs(projectRoot, proposalPath, p, stamp)
+		if err != nil {
+			return Result{}, err
+		}
+		applied = append(applied, paths...)
+	case "deprecate":
+		path, err := markTargetStatus(projectRoot, p.Learning.Target, "deprecated", stamp)
+		if err != nil {
+			return Result{}, err
+		}
+		applied = append(applied, path)
+	default:
+		return Result{}, fmt.Errorf("unsupported learning.operation %q", op)
 	}
 	p.Status = "applied"
 	p.AppliedAt = stamp
@@ -110,6 +130,168 @@ func Apply(projectRoot string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	return Result{ProposalPath: rel(projectRoot, proposalPath), Applied: applied}, nil
+}
+
+func learningOperation(p proposal.Proposal) string {
+	if p.Learning.Operation != "" {
+		return p.Learning.Operation
+	}
+	if p.Operation != "" {
+		return p.Operation
+	}
+	return "create"
+}
+
+func createOutputs(projectRoot, proposalPath string, p proposal.Proposal, stamp string) ([]string, error) {
+	var applied []string
+	for i, c := range p.CandidateMemories {
+		path, err := writeMemory(projectRoot, proposalPath, p, c, i, stamp)
+		if err != nil {
+			return nil, err
+		}
+		applied = append(applied, path)
+	}
+	for i, c := range p.CandidateSkills {
+		path, err := writeSkill(projectRoot, proposalPath, p, c, i, stamp)
+		if err != nil {
+			return nil, err
+		}
+		applied = append(applied, path)
+	}
+	return applied, nil
+}
+
+func updateTarget(projectRoot, proposalPath string, p proposal.Proposal, stamp string) (string, error) {
+	switch p.Learning.Target.Kind {
+	case "memory":
+		if len(p.CandidateMemories) != 1 || len(p.CandidateSkills) != 0 {
+			return "", fmt.Errorf("memory update requires exactly one candidate memory")
+		}
+		return updateMemory(projectRoot, proposalPath, p, p.CandidateMemories[0], stamp)
+	case "skill":
+		if len(p.CandidateSkills) != 1 || len(p.CandidateMemories) != 0 {
+			return "", fmt.Errorf("skill update requires exactly one candidate skill")
+		}
+		return updateSkill(projectRoot, proposalPath, p, p.CandidateSkills[0], stamp)
+	default:
+		return "", fmt.Errorf("learning.target.kind must be memory or skill")
+	}
+}
+
+func updateMemory(projectRoot, proposalPath string, p proposal.Proposal, c proposal.Candidate, stamp string) (string, error) {
+	path, err := resolveTargetPath(projectRoot, p.Learning.Target)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var card ActiveMemoryCard
+	if err := yaml.Unmarshal(data, &card); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(card.ID) == "" {
+		return "", fmt.Errorf("target memory card missing id: %s", rel(projectRoot, path))
+	}
+	card.Type = c.Type
+	card.Title = c.Title
+	card.Trigger = c.Trigger
+	card.Summary = c.Summary
+	card.Status = "active"
+	card.Scope = p.Scope
+	card.Evidence = c.Evidence
+	card.Source = Source{ProposalID: p.ID, Proposal: rel(projectRoot, proposalPath), RunID: p.Run.ID}
+	card.UpdatedAt = stamp
+	if card.CreatedAt == "" {
+		card.CreatedAt = stamp
+	}
+	updated, err := yaml.Marshal(card)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		return "", err
+	}
+	return rel(projectRoot, path), nil
+}
+
+func updateSkill(projectRoot, proposalPath string, p proposal.Proposal, c proposal.CandidateSkill, stamp string) (string, error) {
+	path, err := resolveTargetPath(projectRoot, p.Learning.Target)
+	if err != nil {
+		return "", err
+	}
+	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	content := skillContent(name, rel(projectRoot, proposalPath), p, c, stamp, "active")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return rel(projectRoot, path), nil
+}
+
+func markTargetStatus(projectRoot string, target proposal.LearningTarget, status string, stamp string) (string, error) {
+	path, err := resolveTargetPath(projectRoot, target)
+	if err != nil {
+		return "", err
+	}
+	switch target.Kind {
+	case "memory":
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		var card ActiveMemoryCard
+		if err := yaml.Unmarshal(data, &card); err != nil {
+			return "", err
+		}
+		card.Status = status
+		card.UpdatedAt = stamp
+		updated, err := yaml.Marshal(card)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(path, updated, 0o644); err != nil {
+			return "", err
+		}
+	case "skill":
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		updated := setSkillFrontmatterStatus(string(data), status, stamp)
+		if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("learning.target.kind must be memory or skill")
+	}
+	return rel(projectRoot, path), nil
+}
+
+func resolveTargetPath(projectRoot string, target proposal.LearningTarget) (string, error) {
+	if strings.TrimSpace(target.Path) == "" {
+		return "", fmt.Errorf("learning.target.path is required")
+	}
+	path := target.Path
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(projectRoot, path)
+	}
+	cleanRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return "", err
+	}
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	relPath, err := filepath.Rel(cleanRoot, cleanPath)
+	if err != nil || strings.HasPrefix(relPath, "..") || filepath.IsAbs(relPath) {
+		return "", fmt.Errorf("learning.target.path must stay under project root")
+	}
+	if info, err := os.Stat(cleanPath); err != nil || info.IsDir() {
+		return "", fmt.Errorf("learning target not found: %s", target.Path)
+	}
+	return cleanPath, nil
 }
 
 func writeMemory(projectRoot, proposalPath string, p proposal.Proposal, c proposal.Candidate, index int, stamp string) (string, error) {
@@ -151,10 +333,27 @@ func writeMemory(projectRoot, proposalPath string, p proposal.Proposal, c propos
 
 func writeSkill(projectRoot, proposalPath string, p proposal.Proposal, c proposal.CandidateSkill, index int, stamp string) (string, error) {
 	name := uniqueID(p.ID, c.Name, index)
-	content := fmt.Sprintf(`---
+	content := skillContent(name, rel(projectRoot, proposalPath), p, c, stamp, "active")
+	dir := filepath.Join(projectRoot, ".sima", "personal", "skills", "active")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, name+".md")
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("active skill already exists: %s", rel(projectRoot, path))
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return rel(projectRoot, path), nil
+}
+
+func skillContent(name, sourceProposal string, p proposal.Proposal, c proposal.CandidateSkill, stamp string, status string) string {
+	return fmt.Sprintf(`---
 name: %s
 description: %q
 scope: personal
+status: %s
 source_proposal: %s
 source_run: %s
 created_at: %s
@@ -174,19 +373,37 @@ updated_at: %s
 ## Evidence
 
 %s
-`, name, c.Trigger, rel(projectRoot, proposalPath), p.Run.ID, stamp, stamp, c.Name, c.Trigger, c.Summary, renderEvidence(c.Evidence))
-	dir := filepath.Join(projectRoot, ".sima", "personal", "skills", "active")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+`, name, c.Trigger, status, sourceProposal, p.Run.ID, stamp, stamp, c.Name, c.Trigger, c.Summary, renderEvidence(c.Evidence))
+}
+
+func setSkillFrontmatterStatus(text, status, stamp string) string {
+	if !strings.HasPrefix(text, "---\n") {
+		return fmt.Sprintf("---\nstatus: %s\nupdated_at: %s\n---\n\n%s", status, stamp, text)
 	}
-	path := filepath.Join(dir, name+".md")
-	if _, err := os.Stat(path); err == nil {
-		return "", fmt.Errorf("active skill already exists: %s", rel(projectRoot, path))
+	parts := strings.SplitN(text, "\n---\n", 2)
+	if len(parts) != 2 {
+		return fmt.Sprintf("---\nstatus: %s\nupdated_at: %s\n---\n\n%s", status, stamp, text)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", err
+	lines := strings.Split(parts[0], "\n")
+	statusSet := false
+	updatedSet := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, "status:") {
+			lines[i] = "status: " + status
+			statusSet = true
+		}
+		if strings.HasPrefix(line, "updated_at:") {
+			lines[i] = "updated_at: " + stamp
+			updatedSet = true
+		}
 	}
-	return rel(projectRoot, path), nil
+	if !statusSet {
+		lines = append(lines, "status: "+status)
+	}
+	if !updatedSet {
+		lines = append(lines, "updated_at: "+stamp)
+	}
+	return strings.Join(lines, "\n") + "\n---\n" + parts[1]
 }
 
 func resolveProposal(projectRoot, target string) (string, error) {

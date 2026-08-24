@@ -82,7 +82,7 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 		notes = append(notes, p.Safety.Flags...)
 		return "reject", notes
 	}
-	if len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
+	if learningOperation(p) != "deprecate" && len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
 		return "reject", []string{"proposal has no candidate memories or skills"}
 	}
 	if p.CandidateSource == "fallback" {
@@ -91,10 +91,12 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 	if decision, notes, ok := decideLearning(p); ok {
 		return decision, notes
 	}
-	if conflicts := activeConflicts(projectRoot, p); len(conflicts) > 0 {
-		return "defer", append([]string{"active output already exists; manual dedup/update needed"}, conflicts...)
+	if learningOperation(p) == "create" {
+		if conflicts := activeConflicts(projectRoot, p); len(conflicts) > 0 {
+			return "defer", append([]string{"active output already exists; manual dedup/update needed"}, conflicts...)
+		}
 	}
-	return "apply", []string{"deterministic archivist approved: valid personal safe proposal with evidence and no active output conflict"}
+	return "apply", []string{"deterministic archivist approved: valid personal safe proposal with evidence and learning gates passed"}
 }
 
 func decideLearning(p proposal.Proposal) (string, []string, bool) {
@@ -132,6 +134,16 @@ func decideLearning(p proposal.Proposal) (string, []string, bool) {
 	default:
 		return "reject", []string{fmt.Sprintf("unsupported learning destination %q", p.Learning.Destination)}, true
 	}
+}
+
+func learningOperation(p proposal.Proposal) string {
+	if p.Learning.Operation != "" {
+		return p.Learning.Operation
+	}
+	if p.Operation != "" {
+		return p.Operation
+	}
+	return "create"
 }
 
 func activeConflicts(projectRoot string, p proposal.Proposal) []string {
@@ -208,7 +220,7 @@ func readActiveMemory(projectRoot string) []activeMemoryRef {
 			Trigger string `yaml:"trigger"`
 			Status  string `yaml:"status"`
 		}
-		if err := yaml.Unmarshal(data, &card); err != nil || card.Status == "archived" || card.Status == "deprecated" {
+		if err := yaml.Unmarshal(data, &card); err != nil || card.Status == "archived" || card.Status == "deprecated" || card.Status == "superseded" {
 			continue
 		}
 		refs = append(refs, activeMemoryRef{Path: rel(projectRoot, path), TitleSlug: slug(card.Title), TriggerSlug: slug(card.Trigger)})

@@ -72,8 +72,15 @@ type Safety struct {
 type Learning struct {
 	Destination string          `yaml:"destination,omitempty"`
 	Operation   string          `yaml:"operation,omitempty"`
+	Target      LearningTarget  `yaml:"target,omitempty"`
 	Quality     LearningQuality `yaml:"quality,omitempty"`
 	Notes       []string        `yaml:"notes,omitempty"`
+}
+
+type LearningTarget struct {
+	Kind string `yaml:"kind,omitempty"`
+	Path string `yaml:"path,omitempty"`
+	ID   string `yaml:"id,omitempty"`
 }
 
 type LearningQuality struct {
