@@ -262,12 +262,12 @@ func TestArchivistCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("archivist code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	if !strings.Contains(out.String(), "Archivist decision: apply") {
+	if !strings.Contains(out.String(), "Archivist decision: defer") || !strings.Contains(out.String(), "fallback review candidates require structured worker proposals") {
 		t.Fatalf("unexpected archivist output: %q", out.String())
 	}
 }
 
-func TestLearnCommand(t *testing.T) {
+func TestLearnCommandDefersFallbackCandidate(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
 		t.Fatalf("Init() error = %v", initErr)
@@ -280,6 +280,55 @@ func TestLearnCommand(t *testing.T) {
 	out.Reset()
 	stderr.Reset()
 	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture and apply safe lesson", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Run ", "Proposal written:", "Archivist decision: defer", "Learn stopped:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("learn output missing %q: %q", want, out.String())
+		}
+	}
+	cards, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "cards"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 0 {
+		t.Fatalf("expected no applied cards for fallback candidate, got %d", len(cards))
+	}
+
+	proposals, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("expected one proposal, got %d", len(proposals))
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", proposals[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: candidate") || !strings.Contains(string(data), "archivist_decision: defer") || !strings.Contains(string(data), "candidate_source: fallback") {
+		t.Fatalf("fallback proposal not left deferred:\n%s", data)
+	}
+}
+
+func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	worker := filepath.Join(root, "structured-worker.sh")
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'YAML'\nproposed_memory:\n  - type: workflow\n    title: Structured learn candidate\n    trigger: When sima learn receives structured worker proposals.\n    summary: sima learn may auto-apply safe structured personal proposals.\nYAML\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "structured", "--kind", "codex", "--executable", worker, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "structured", "--task", "capture and apply structured lesson", "--path", root}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
@@ -306,7 +355,7 @@ func TestLearnCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "status: applied") || !strings.Contains(string(data), "archivist_decision: apply") {
+	if !strings.Contains(string(data), "status: applied") || !strings.Contains(string(data), "archivist_decision: apply") || !strings.Contains(string(data), "candidate_source: structured") {
 		t.Fatalf("proposal not marked applied:\n%s", data)
 	}
 }

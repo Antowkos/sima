@@ -261,6 +261,9 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "Proposal written: %s\n", proposalResult.Path)
 		fmt.Fprintf(stdout, "Candidates: %d\n", proposalResult.Candidates)
+		if proposalResult.Source != "" {
+			fmt.Fprintf(stdout, "Candidate source: %s\n", proposalResult.Source)
+		}
 		fmt.Fprintf(stdout, "Next: sima review --path %s\n", abs)
 		fmt.Fprintf(stdout, "Next: sima archivist --proposal %s --path %s\n", filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml")), abs)
 	}
@@ -330,6 +333,9 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	proposalID := filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml"))
 	fmt.Fprintf(stdout, "Proposal written: %s\n", proposalResult.Path)
 	fmt.Fprintf(stdout, "Candidates: %d\n", proposalResult.Candidates)
+	if proposalResult.Source != "" {
+		fmt.Fprintf(stdout, "Candidate source: %s\n", proposalResult.Source)
+	}
 	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
 
 	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID})
@@ -403,6 +409,9 @@ func runPropose(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Archivist decision: %s\n", result.Decision)
 	fmt.Fprintf(stdout, "Safety: %s\n", result.Safety)
 	fmt.Fprintf(stdout, "Candidates: %d\n", result.Candidates)
+	if result.Source != "" {
+		fmt.Fprintf(stdout, "Candidate source: %s\n", result.Source)
+	}
 	return 0
 }
 

@@ -73,6 +73,9 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 	if len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
 		return "reject", []string{"proposal has no candidate memories or skills"}
 	}
+	if p.CandidateSource == "fallback" {
+		return "defer", []string{"fallback review candidates require structured worker proposals before auto-apply"}
+	}
 	if conflicts := activeConflicts(projectRoot, p); len(conflicts) > 0 {
 		return "defer", append([]string{"active output already exists; manual dedup/update needed"}, conflicts...)
 	}

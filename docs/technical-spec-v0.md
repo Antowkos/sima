@@ -102,7 +102,7 @@ The command first generates a brief, copies it into the run directory, builds a 
 run -> propose -> archivist -> apply
 ```
 
-It stops without applying when the worker run fails, proposal generation fails, safety/review gates reject the proposal, or the archivist returns `reject`/`defer`. Only an `archivist_decision: apply` proposal reaches `sima apply`.
+It stops without applying when the worker run fails, proposal generation fails, safety/review gates reject the proposal, the proposal contains only a fallback review candidate, or the archivist returns `reject`/`defer`. Only an `archivist_decision: apply` proposal reaches `sima apply`; v0 auto-apply requires real structured worker `proposed_memory` / `proposed_skills`.
 
 Backend command mapping for v0:
 
@@ -120,6 +120,7 @@ The v0 proposal is intentionally conservative:
 - it fills missing candidate evidence from the run artifact bundle;
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;
+- it labels candidates with `candidate_source: structured` or `candidate_source: fallback`;
 - it emits a fallback review candidate only for successful, safe runs with no structured worker proposals.
 
 ## Proposal review
@@ -157,9 +158,9 @@ When gates pass, SIMA writes candidate memories to `.sima/personal/memory/cards/
 
 Decision rules:
 
-- `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one candidate memory/skill, and no active output file conflict exists.
+- `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one structured candidate memory/skill, and no active output file conflict exists.
 - `reject`: proposal is invalid, suspicious/unsafe, or has no candidates.
-- `defer`: proposal is outside v0 auto-approval scope or needs manual dedup/update because an active output already exists.
+- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback review candidate, or needs manual dedup/update because an active output already exists.
 
 `apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
 

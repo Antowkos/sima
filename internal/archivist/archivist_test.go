@@ -84,6 +84,12 @@ func createProposal(t *testing.T, task string, suspicious bool) (string, string)
 		if err := os.WriteFile(stdoutPath, []byte("hardcoded output and skipped validation\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	} else {
+		reportPath := root + "/.sima/personal/runs/" + runResult.RunID + "/worker-report.yaml"
+		report := "run_id: " + runResult.RunID + "\nstatus: success\nexit_code: 0\ntask: " + task + "\nproposed_memory:\n  - type: workflow\n    title: Structured archivist approval\n    trigger: When a worker emits structured proposed_memory.\n    summary: The deterministic archivist may auto-apply safe structured personal proposals.\n"
+		if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	proposalResult, err := proposal.Generate(root, proposal.Options{FromRun: runResult.RunID})
 	if err != nil {

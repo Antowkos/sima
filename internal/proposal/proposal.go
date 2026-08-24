@@ -22,6 +22,7 @@ type Result struct {
 	Decision   string
 	Safety     string
 	Candidates int
+	Source     string
 }
 
 type WorkerReport struct {
@@ -50,6 +51,7 @@ type Proposal struct {
 	Summary            string           `yaml:"summary"`
 	CandidateMemories  []Candidate      `yaml:"candidate_memories,omitempty"`
 	CandidateSkills    []CandidateSkill `yaml:"candidate_skills,omitempty"`
+	CandidateSource    string           `yaml:"candidate_source,omitempty"`
 	Evidence           []Evidence       `yaml:"evidence"`
 	CreatedAt          string           `yaml:"created_at"`
 	AppliedAt          string           `yaml:"applied_at,omitempty"`
@@ -144,6 +146,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		proposal.CandidateMemories = candidateMemories
 		proposal.CandidateSkills = candidateSkills
 		if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
+			proposal.CandidateSource = "fallback"
 			proposal.CandidateMemories = []Candidate{{
 				Type:     "workflow",
 				Title:    "Review successful SIMA run for durable lessons",
@@ -151,6 +154,8 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 				Summary:  "The run completed successfully; inspect the bounded artifact bundle and promote only durable, evidence-backed lessons.",
 				Evidence: evidence,
 			}}
+		} else {
+			proposal.CandidateSource = "structured"
 		}
 	}
 
@@ -166,7 +171,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return Result{}, err
 	}
-	return Result{Path: path, RunID: runID, Decision: proposal.ArchivistDecision, Safety: safety.Decision, Candidates: len(proposal.CandidateMemories) + len(proposal.CandidateSkills)}, nil
+	return Result{Path: path, RunID: runID, Decision: proposal.ArchivistDecision, Safety: safety.Decision, Candidates: len(proposal.CandidateMemories) + len(proposal.CandidateSkills), Source: proposal.CandidateSource}, nil
 }
 
 func resolveRun(projectRoot, fromRun string) (string, string, error) {
