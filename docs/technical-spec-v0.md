@@ -115,8 +115,9 @@ Backend command mapping for v0:
 
 Structured worker output contract:
 
-- worker stdout must be YAML only when it wants to propose durable knowledge;
-- the first non-empty stdout line must be `proposed_memory:`, `proposed_skills:`, or `status:`;
+- worker stdout should be JSON only when it wants to propose durable knowledge;
+- YAML remains accepted for backwards compatibility, but JSON is preferred for real LLM backends because string escaping is less ambiguous;
+- JSON stdout must start with `{`; YAML stdout must start with `proposed_memory:`, `proposed_skills:`, or `status:`;
 - `proposed_memory` items require `type`, `title`, `trigger`, and `summary`;
 - `proposed_skills` items require `name`, `trigger`, and `summary`;
 - evidence may be omitted by the worker; SIMA fills candidate evidence from the bounded run bundle;
@@ -124,16 +125,24 @@ Structured worker output contract:
 
 Minimal valid stdout:
 
-```yaml
-proposed_memory:
-  - type: gotcha
-    title: Short durable lesson title
-    trigger: When a future agent should recall this memory.
-    summary: Evidence-backed lesson; no transient task progress.
-proposed_skills:
-  - name: lowercase-skill-name
-    trigger: When a future agent should use this reusable workflow.
-    summary: What the skill should teach or do.
+```json
+{
+  "proposed_memory": [
+    {
+      "type": "gotcha",
+      "title": "Short durable lesson title",
+      "trigger": "When a future agent should recall this memory.",
+      "summary": "Evidence-backed lesson; no transient task progress."
+    }
+  ],
+  "proposed_skills": [
+    {
+      "name": "lowercase-skill-name",
+      "trigger": "When a future agent should use this reusable workflow.",
+      "summary": "What the skill should teach or do."
+    }
+  ]
+}
 ```
 
 The v0 proposal is intentionally conservative:

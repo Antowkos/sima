@@ -165,17 +165,29 @@ func allocateRunDir(projectRoot, baseRunID string) (string, string, error) {
 func buildPrompt(task, briefPath string) string {
 	return fmt.Sprintf(`Read the SIMA brief at %s, then perform this bounded task: %s
 
-Return a concise YAML report. If you learned durable, triggerable lessons, include them as:
+Return JSON only: no Markdown fences, no prose before or after the JSON. If there is no durable lesson, return:
 
-proposed_memory:
-  - type: gotcha|workflow|decision|invariant|rejected_approach|open_question|anti_pattern|guardrail
-    title: short title
-    trigger: when a future agent should recall it
-    summary: durable evidence-backed lesson
-proposed_skills:
-  - name: skill-name
-    trigger: when to use the procedure
-    summary: reusable procedure summary
+{"status":"success"}
+
+If you learned durable, triggerable lessons, include them as:
+
+{
+  "proposed_memory": [
+    {
+      "type": "gotcha|workflow|decision|invariant|rejected_approach|open_question|anti_pattern|guardrail",
+      "title": "short title",
+      "trigger": "when a future agent should recall it",
+      "summary": "durable evidence-backed lesson"
+    }
+  ],
+  "proposed_skills": [
+    {
+      "name": "skill-name",
+      "trigger": "when to use the procedure",
+      "summary": "reusable procedure summary"
+    }
+  ]
+}
 
 Do not propose transient task progress, raw logs, PR/issue status, or lessons from weakened tests/bypassed validation.`, briefPath, task)
 }

@@ -1,6 +1,7 @@
 package proposal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,16 +27,16 @@ type Result struct {
 }
 
 type WorkerReport struct {
-	RunID          string           `yaml:"run_id"`
-	Backend        string           `yaml:"backend"`
-	Status         string           `yaml:"status"`
-	Task           string           `yaml:"task"`
-	BriefPath      string           `yaml:"brief_path"`
-	ExitCode       int              `yaml:"exit_code"`
-	StdoutPath     string           `yaml:"stdout_path"`
-	StderrPath     string           `yaml:"stderr_path"`
-	ProposedMemory []Candidate      `yaml:"proposed_memory,omitempty"`
-	ProposedSkills []CandidateSkill `yaml:"proposed_skills,omitempty"`
+	RunID          string           `yaml:"run_id" json:"run_id,omitempty"`
+	Backend        string           `yaml:"backend" json:"backend,omitempty"`
+	Status         string           `yaml:"status" json:"status,omitempty"`
+	Task           string           `yaml:"task" json:"task,omitempty"`
+	BriefPath      string           `yaml:"brief_path" json:"brief_path,omitempty"`
+	ExitCode       int              `yaml:"exit_code" json:"exit_code,omitempty"`
+	StdoutPath     string           `yaml:"stdout_path" json:"stdout_path,omitempty"`
+	StderrPath     string           `yaml:"stderr_path" json:"stderr_path,omitempty"`
+	ProposedMemory []Candidate      `yaml:"proposed_memory,omitempty" json:"proposed_memory,omitempty"`
+	ProposedSkills []CandidateSkill `yaml:"proposed_skills,omitempty" json:"proposed_skills,omitempty"`
 }
 
 type Proposal struct {
@@ -73,24 +74,24 @@ type RunRef struct {
 }
 
 type Candidate struct {
-	Type     string     `yaml:"type"`
-	Title    string     `yaml:"title"`
-	Trigger  string     `yaml:"trigger"`
-	Summary  string     `yaml:"summary"`
-	Evidence []Evidence `yaml:"evidence"`
+	Type     string     `yaml:"type" json:"type"`
+	Title    string     `yaml:"title" json:"title"`
+	Trigger  string     `yaml:"trigger" json:"trigger"`
+	Summary  string     `yaml:"summary" json:"summary"`
+	Evidence []Evidence `yaml:"evidence" json:"evidence,omitempty"`
 }
 
 type CandidateSkill struct {
-	Name     string     `yaml:"name"`
-	Trigger  string     `yaml:"trigger"`
-	Summary  string     `yaml:"summary"`
-	Evidence []Evidence `yaml:"evidence"`
+	Name     string     `yaml:"name" json:"name"`
+	Trigger  string     `yaml:"trigger" json:"trigger"`
+	Summary  string     `yaml:"summary" json:"summary"`
+	Evidence []Evidence `yaml:"evidence" json:"evidence,omitempty"`
 }
 
 type Evidence struct {
-	Kind string `yaml:"kind"`
-	Path string `yaml:"path"`
-	Note string `yaml:"note,omitempty"`
+	Kind string `yaml:"kind" json:"kind"`
+	Path string `yaml:"path" json:"path"`
+	Note string `yaml:"note,omitempty" json:"note,omitempty"`
 }
 
 func Generate(projectRoot string, opts Options) (Result, error) {
@@ -246,10 +247,16 @@ func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 	if !looksStructured(text) {
 		return report, parseResult{}
 	}
+	if strings.HasPrefix(text, "{") {
+		if err := json.Unmarshal([]byte(text), &report); err == nil {
+			return report, parseResult{Structured: true}
+		}
+		return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout looks like JSON but is not valid JSON"}}
+	}
 	if err := yaml.Unmarshal([]byte(text), &report); err == nil {
 		return report, parseResult{Structured: true}
 	}
-	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout contains proposed_memory/proposed_skills but is not valid YAML"}}
+	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout contains proposed_memory/proposed_skills/status but is not valid YAML"}}
 }
 
 func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence) ([]Candidate, []CandidateSkill) {
@@ -295,7 +302,7 @@ func looksStructured(text string) bool {
 		if line == "" {
 			continue
 		}
-		return line == "proposed_memory:" || line == "proposed_skills:" || strings.HasPrefix(line, "status:")
+		return strings.HasPrefix(line, "{") || line == "proposed_memory:" || line == "proposed_skills:" || strings.HasPrefix(line, "status:")
 	}
 	return false
 }

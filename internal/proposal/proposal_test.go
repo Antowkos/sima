@@ -173,6 +173,40 @@ func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
 	}
 }
 
+func TestGenerateUsesStructuredJSONFromStdout(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260824-170000-json"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: json stdout proposals\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout := `{"proposed_memory":[{"type":"workflow","title":"JSON proposals are parsed","trigger":"When worker stdout is JSON.","summary":"SIMA can parse JSON worker proposals without YAML scalar pitfalls."}]}`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured" || result.Candidates != 1 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "JSON proposals are parsed") {
+		t.Fatalf("proposal missing JSON candidate:\n%s", data)
+	}
+}
+
 func TestGenerateDoesNotFallbackOnMalformedStructuredStdout(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {
