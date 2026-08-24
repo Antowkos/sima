@@ -21,15 +21,17 @@ type Result struct {
 }
 
 type Item struct {
-	Path       string
-	ID         string
-	RunID      string
-	Status     string
-	Decision   string
-	Safety     string
-	Candidates int
-	Evidence   int
-	Problems   []string
+	Path        string
+	ID          string
+	RunID       string
+	Status      string
+	Decision    string
+	Safety      string
+	Candidates  int
+	Evidence    int
+	Destination string
+	Operation   string
+	Problems    []string
 }
 
 func Review(projectRoot string, opts Options) (Result, error) {
@@ -76,6 +78,8 @@ func readProposal(projectRoot, path string) Item {
 	item.Safety = p.Safety.Decision
 	item.Candidates = len(p.CandidateMemories) + len(p.CandidateSkills)
 	item.Evidence = len(p.Evidence)
+	item.Destination = p.Learning.Destination
+	item.Operation = p.Learning.Operation
 	item.Problems = validate(p)
 	return item
 }
@@ -114,6 +118,12 @@ func validate(p proposal.Proposal) []string {
 	}
 	if p.CandidateSource != "" && !oneOf(p.CandidateSource, []string{"structured", "structured_invalid", "fallback"}) {
 		problems = append(problems, "candidate_source must be structured, structured_invalid, or fallback")
+	}
+	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
+		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")
+	}
+	if p.Learning.Operation != "" && !oneOf(p.Learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
+		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
 	}
 	for _, problem := range p.CandidateErrors {
 		problems = append(problems, "candidate error: "+problem)

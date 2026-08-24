@@ -55,6 +55,7 @@ type Proposal struct {
 	CandidateSkills    []CandidateSkill `yaml:"candidate_skills,omitempty"`
 	CandidateSource    string           `yaml:"candidate_source,omitempty"`
 	CandidateErrors    []string         `yaml:"candidate_errors,omitempty"`
+	Learning           Learning         `yaml:"learning,omitempty"`
 	Evidence           []Evidence       `yaml:"evidence"`
 	CreatedAt          string           `yaml:"created_at"`
 	AppliedAt          string           `yaml:"applied_at,omitempty"`
@@ -66,6 +67,21 @@ type Proposal struct {
 type Safety struct {
 	Decision string   `yaml:"decision"`
 	Flags    []string `yaml:"flags,omitempty"`
+}
+
+type Learning struct {
+	Destination string          `yaml:"destination,omitempty"`
+	Operation   string          `yaml:"operation,omitempty"`
+	Quality     LearningQuality `yaml:"quality,omitempty"`
+	Notes       []string        `yaml:"notes,omitempty"`
+}
+
+type LearningQuality struct {
+	Durable        bool `yaml:"durable"`
+	Triggerable    bool `yaml:"triggerable"`
+	EvidenceBacked bool `yaml:"evidence_backed"`
+	NonTransient   bool `yaml:"non_transient"`
+	Reusable       bool `yaml:"reusable"`
 }
 
 type RunRef struct {
@@ -166,6 +182,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 			proposal.CandidateSource = "structured"
 		}
 	}
+	proposal.Learning = classifyLearning(proposal)
 
 	candidateDir := filepath.Join(projectRoot, ".sima", "personal", "memory", "candidates")
 	if err := os.MkdirAll(candidateDir, 0o755); err != nil {
@@ -295,6 +312,105 @@ func structuredCandidateErrors(report, stdoutReport WorkerReport) []string {
 		}
 	}
 	return problems
+}
+
+func classifyLearning(p Proposal) Learning {
+	learning := Learning{
+		Destination: "session_only",
+		Operation:   p.Operation,
+		Quality: LearningQuality{
+			Durable:        true,
+			Triggerable:    true,
+			EvidenceBacked: len(p.Evidence) > 0,
+			NonTransient:   true,
+			Reusable:       true,
+		},
+	}
+	if p.CandidateSource == "structured_invalid" || len(p.CandidateErrors) > 0 {
+		learning.Destination = "reject"
+		learning.Quality.Durable = false
+		learning.Quality.Triggerable = false
+		learning.Quality.Reusable = false
+		learning.Notes = append(learning.Notes, "structured output is malformed or incomplete")
+		return learning
+	}
+	if p.CandidateSource == "fallback" {
+		learning.Destination = "session_only"
+		learning.Quality.Durable = false
+		learning.Quality.Reusable = false
+		learning.Notes = append(learning.Notes, "fallback candidates require human/librarian review before promotion")
+		return learning
+	}
+	memoryCount := len(p.CandidateMemories)
+	skillCount := len(p.CandidateSkills)
+	if memoryCount == 0 && skillCount == 0 {
+		learning.Destination = "session_only"
+		learning.Quality.Durable = false
+		learning.Quality.Triggerable = false
+		learning.Quality.Reusable = false
+		learning.Notes = append(learning.Notes, "no candidate memory or skill was proposed")
+		return learning
+	}
+	switch {
+	case memoryCount > 0 && skillCount > 0:
+		learning.Destination = "mixed"
+	case skillCount > 0:
+		learning.Destination = "skill"
+	case memoryCount > 0:
+		learning.Destination = "memory"
+	}
+	for i, c := range p.CandidateMemories {
+		text := c.Title + "\n" + c.Trigger + "\n" + c.Summary
+		if !looksTriggerable(c.Trigger) {
+			learning.Quality.Triggerable = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_memories[%d] trigger does not describe recall timing", i))
+		}
+		if containsTransientLesson(text) {
+			learning.Quality.Durable = false
+			learning.Quality.NonTransient = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_memories[%d] looks transient", i))
+		}
+		if len(c.Evidence) == 0 {
+			learning.Quality.EvidenceBacked = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_memories[%d] missing evidence", i))
+		}
+	}
+	for i, c := range p.CandidateSkills {
+		text := c.Name + "\n" + c.Trigger + "\n" + c.Summary
+		if !looksTriggerable(c.Trigger) {
+			learning.Quality.Triggerable = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_skills[%d] trigger does not describe usage timing", i))
+		}
+		if containsTransientLesson(text) {
+			learning.Quality.Durable = false
+			learning.Quality.NonTransient = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_skills[%d] looks transient", i))
+		}
+		if len(c.Evidence) == 0 {
+			learning.Quality.EvidenceBacked = false
+			learning.Notes = append(learning.Notes, fmt.Sprintf("candidate_skills[%d] missing evidence", i))
+		}
+	}
+	if skillCount == 0 {
+		learning.Quality.Reusable = true
+	}
+	return learning
+}
+
+func looksTriggerable(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	return strings.Contains(lower, "when ") || strings.Contains(lower, "when_") || strings.Contains(lower, "if ") || strings.Contains(lower, "before ") || strings.Contains(lower, "after ") || strings.Contains(lower, "while ") || strings.Contains(lower, "during ")
+}
+
+func containsTransientLesson(text string) bool {
+	lower := strings.ToLower(text)
+	transient := []string{"commit ", "committed ", "pushed ", "pr #", "pull request", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
+	for _, marker := range transient {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func looksStructured(text string) bool {

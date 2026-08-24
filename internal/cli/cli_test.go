@@ -179,7 +179,7 @@ func TestReviewCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("review code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	if !strings.Contains(out.String(), "valid") || !strings.Contains(out.String(), "Summary: 1 total, 1 valid, 0 blocked") {
+	if !strings.Contains(out.String(), "valid") || !strings.Contains(out.String(), "destination=session_only") || !strings.Contains(out.String(), "operation=create") || !strings.Contains(out.String(), "Summary: 1 total, 1 valid, 0 blocked") {
 		t.Fatalf("unexpected review output: %q", out.String())
 	}
 }

@@ -154,11 +154,29 @@ The v0 proposal is intentionally conservative:
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;
 - it labels candidates with `candidate_source: structured` or `candidate_source: fallback`;
-- it emits a fallback review candidate only for successful, safe runs with no structured worker proposals.
+- it emits a fallback review candidate only for successful, safe runs with no structured worker proposals;
+- it persists a librarian-style `learning` classification so downstream review can distinguish active memory, reusable skills, session-only artifacts, and rejected malformed output.
+
+The persisted learning classification is intentionally small:
+
+```yaml
+learning:
+  destination: memory | skill | mixed | session_only | reject
+  operation: create | update | deprecate | supersede
+  quality:
+    durable: true
+    triggerable: true
+    evidence_backed: true
+    non_transient: true
+    reusable: true
+  notes: []
+```
+
+This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary.
 
 ## Proposal review
 
-`sima review [--path <path>] [--all]` reads personal candidate proposals, validates their structure, and prints a compact review queue summary.
+`sima review [--path <path>] [--all]` reads personal candidate proposals, validates their structure, and prints a compact review queue summary with `destination` and `operation`.
 
 SIMA borrows the useful parts of Hermes' learning model for quality control:
 

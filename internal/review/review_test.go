@@ -37,7 +37,7 @@ func TestReviewListsValidCandidate(t *testing.T) {
 		t.Fatalf("items = %d, want 1", len(result.Items))
 	}
 	item := result.Items[0]
-	if item.ID == "" || item.RunID != runResult.RunID || item.Safety != "safe" || len(item.Problems) != 0 {
+	if item.ID == "" || item.RunID != runResult.RunID || item.Safety != "safe" || item.Destination != "session_only" || item.Operation != "create" || len(item.Problems) != 0 {
 		t.Fatalf("unexpected item: %+v", item)
 	}
 }

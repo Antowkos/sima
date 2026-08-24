@@ -459,7 +459,7 @@ func runReview(args []string, stdout, stderr io.Writer) int {
 		} else {
 			valid++
 		}
-		fmt.Fprintf(stdout, "%s\t%s\tstatus=%s\tdecision=%s\tsafety=%s\tcandidates=%d\tevidence=%d\t%s\n", state, item.ID, item.Status, item.Decision, item.Safety, item.Candidates, item.Evidence, item.Path)
+		fmt.Fprintf(stdout, "%s	%s	status=%s	decision=%s	safety=%s	destination=%s	operation=%s	candidates=%d	evidence=%d	%s\n", state, item.ID, item.Status, item.Decision, item.Safety, item.Destination, item.Operation, item.Candidates, item.Evidence, item.Path)
 		for _, problem := range item.Problems {
 			fmt.Fprintf(stdout, "  - %s\n", problem)
 		}

@@ -44,7 +44,7 @@ func TestGenerateCreatesRunProposal(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"kind: run_reflection", "archivist_decision: defer", "decision: safe", "worker-report.yaml"} {
+	for _, want := range []string{"kind: run_reflection", "archivist_decision: defer", "decision: safe", "destination: session_only", "fallback candidates require human/librarian review", "worker-report.yaml"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("proposal missing %q:\n%s", want, text)
 		}
@@ -127,7 +127,7 @@ proposed_skills:
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"Structured proposals are parsed", "structured-proposal-skill", "worker-report.yaml"} {
+	for _, want := range []string{"Structured proposals are parsed", "structured-proposal-skill", "destination: mixed", "worker-report.yaml"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("proposal missing %q:\n%s", want, text)
 		}
@@ -205,8 +205,10 @@ func TestGenerateUsesStructuredJSONFromStdout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "JSON proposals are parsed") {
-		t.Fatalf("proposal missing JSON candidate:\n%s", data)
+	for _, want := range []string{"JSON proposals are parsed", "destination: memory"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("proposal missing %q:\n%s", want, data)
+		}
 	}
 }
 
