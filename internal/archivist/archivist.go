@@ -58,6 +58,11 @@ func Decide(projectRoot string, opts Options) (Result, error) {
 }
 
 func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []string) {
+	if p.CandidateSource == "structured_invalid" {
+		notes := []string{"structured worker proposal is malformed or incomplete"}
+		notes = append(notes, p.CandidateErrors...)
+		return "defer", notes
+	}
 	item := reviewItem(projectRoot, proposalPath)
 	if len(item.Problems) > 0 {
 		return "reject", append([]string{"review validation failed"}, item.Problems...)

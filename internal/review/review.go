@@ -112,6 +112,12 @@ func validate(p proposal.Proposal) []string {
 	if len(p.Evidence) == 0 {
 		problems = append(problems, "missing evidence")
 	}
+	if p.CandidateSource != "" && !oneOf(p.CandidateSource, []string{"structured", "structured_invalid", "fallback"}) {
+		problems = append(problems, "candidate_source must be structured, structured_invalid, or fallback")
+	}
+	for _, problem := range p.CandidateErrors {
+		problems = append(problems, "candidate error: "+problem)
+	}
 	for i, ev := range p.Evidence {
 		if strings.TrimSpace(ev.Kind) == "" || strings.TrimSpace(ev.Path) == "" {
 			problems = append(problems, fmt.Sprintf("evidence[%d] requires kind and path", i))

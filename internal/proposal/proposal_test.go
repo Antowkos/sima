@@ -172,3 +172,84 @@ func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
 		t.Fatalf("proposal missing stdout candidate:\n%s", data)
 	}
 }
+
+func TestGenerateDoesNotFallbackOnMalformedStructuredStdout(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260824-160000-malformed"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: malformed stdout proposals\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout := "proposed_memory:\n  - type: workflow\n    title: Missing quote: \"broken\n"
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured_invalid" || result.Candidates != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"candidate_source: structured_invalid", "candidate_errors:", "not valid YAML"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "Review successful SIMA run for durable lessons") {
+		t.Fatalf("malformed structured stdout should not fall back:\n%s", text)
+	}
+}
+
+func TestGenerateMarksIncompleteStructuredCandidatesInvalid(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260824-161000-incomplete"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	report := `run_id: 20260824-161000-incomplete
+status: success
+exit_code: 0
+task: incomplete structured proposals
+proposed_memory:
+  - type: gotcha
+    title: Missing trigger and summary
+`
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured_invalid" || result.Candidates != 1 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"candidate_source: structured_invalid", "proposed_memory[0] requires type, title, trigger, and summary"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+}

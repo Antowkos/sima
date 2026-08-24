@@ -113,10 +113,34 @@ Backend command mapping for v0:
 
 `sima propose --from-run <run-id|last|path>` creates a personal candidate proposal under `.sima/personal/memory/candidates/` from a bounded run bundle.
 
+Structured worker output contract:
+
+- worker stdout must be YAML only when it wants to propose durable knowledge;
+- the first non-empty stdout line must be `proposed_memory:`, `proposed_skills:`, or `status:`;
+- `proposed_memory` items require `type`, `title`, `trigger`, and `summary`;
+- `proposed_skills` items require `name`, `trigger`, and `summary`;
+- evidence may be omitted by the worker; SIMA fills candidate evidence from the bounded run bundle;
+- if there is no durable lesson, the worker should omit both proposal lists.
+
+Minimal valid stdout:
+
+```yaml
+proposed_memory:
+  - type: gotcha
+    title: Short durable lesson title
+    trigger: When a future agent should recall this memory.
+    summary: Evidence-backed lesson; no transient task progress.
+proposed_skills:
+  - name: lowercase-skill-name
+    trigger: When a future agent should use this reusable workflow.
+    summary: What the skill should teach or do.
+```
+
 The v0 proposal is intentionally conservative:
 
 - it references task, brief, command, stdout, stderr, and `worker-report.yaml` as evidence;
 - it reads structured `proposed_memory` and `proposed_skills` from `worker-report.yaml` or YAML stdout when present;
+- it marks malformed/incomplete structured output as `candidate_source: structured_invalid` with `candidate_errors`, instead of silently falling back;
 - it fills missing candidate evidence from the run artifact bundle;
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;

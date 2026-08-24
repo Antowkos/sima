@@ -52,6 +52,7 @@ type Proposal struct {
 	CandidateMemories  []Candidate      `yaml:"candidate_memories,omitempty"`
 	CandidateSkills    []CandidateSkill `yaml:"candidate_skills,omitempty"`
 	CandidateSource    string           `yaml:"candidate_source,omitempty"`
+	CandidateErrors    []string         `yaml:"candidate_errors,omitempty"`
 	Evidence           []Evidence       `yaml:"evidence"`
 	CreatedAt          string           `yaml:"created_at"`
 	AppliedAt          string           `yaml:"applied_at,omitempty"`
@@ -113,11 +114,13 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 
 	stdoutText := readText(filepath.Join(runDir, "stdout.log"), 4096)
 	stderrText := readText(filepath.Join(runDir, "stderr.log"), 4096)
-	stdoutReport := parseWorkerOutput(stdoutText)
+	stdoutReport, stdoutParse := parseWorkerOutput(stdoutText)
 	safety := assessSafety(stdoutText + "\n" + stderrText)
 	summary := summarize(report, stdoutText, stderrText)
 	evidence := evidenceFor(projectRoot, runDir)
 	candidateMemories, candidateSkills := structuredCandidates(report, stdoutReport, evidence)
+	candidateErrors := structuredCandidateErrors(report, stdoutReport)
+	candidateErrors = append(candidateErrors, stdoutParse.Errors...)
 
 	proposal := Proposal{
 		Version:           1,
@@ -145,7 +148,10 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 	if report.Status == "success" && safety.Decision == "safe" {
 		proposal.CandidateMemories = candidateMemories
 		proposal.CandidateSkills = candidateSkills
-		if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
+		proposal.CandidateErrors = candidateErrors
+		if len(candidateErrors) > 0 {
+			proposal.CandidateSource = "structured_invalid"
+		} else if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
 			proposal.CandidateSource = "fallback"
 			proposal.CandidateMemories = []Candidate{{
 				Type:     "workflow",
@@ -226,16 +232,24 @@ func readWorkerReport(runDir string) (WorkerReport, error) {
 	return report, nil
 }
 
-func parseWorkerOutput(stdoutText string) WorkerReport {
+type parseResult struct {
+	Structured bool
+	Errors     []string
+}
+
+func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 	var report WorkerReport
 	text := strings.TrimSpace(stdoutText)
 	if text == "" {
-		return report
+		return report, parseResult{}
+	}
+	if !looksStructured(text) {
+		return report, parseResult{}
 	}
 	if err := yaml.Unmarshal([]byte(text), &report); err == nil {
-		return report
+		return report, parseResult{Structured: true}
 	}
-	return WorkerReport{}
+	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout contains proposed_memory/proposed_skills but is not valid YAML"}}
 }
 
 func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence) ([]Candidate, []CandidateSkill) {
@@ -254,6 +268,36 @@ func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence
 		}
 	}
 	return memories, skills
+}
+
+func structuredCandidateErrors(report, stdoutReport WorkerReport) []string {
+	var problems []string
+	memories := append([]Candidate{}, report.ProposedMemory...)
+	memories = append(memories, stdoutReport.ProposedMemory...)
+	skills := append([]CandidateSkill{}, report.ProposedSkills...)
+	skills = append(skills, stdoutReport.ProposedSkills...)
+	for i, c := range memories {
+		if strings.TrimSpace(c.Type) == "" || strings.TrimSpace(c.Title) == "" || strings.TrimSpace(c.Trigger) == "" || strings.TrimSpace(c.Summary) == "" {
+			problems = append(problems, fmt.Sprintf("proposed_memory[%d] requires type, title, trigger, and summary", i))
+		}
+	}
+	for i, c := range skills {
+		if strings.TrimSpace(c.Name) == "" || strings.TrimSpace(c.Trigger) == "" || strings.TrimSpace(c.Summary) == "" {
+			problems = append(problems, fmt.Sprintf("proposed_skills[%d] requires name, trigger, and summary", i))
+		}
+	}
+	return problems
+}
+
+func looksStructured(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		return line == "proposed_memory:" || line == "proposed_skills:" || strings.HasPrefix(line, "status:")
+	}
+	return false
 }
 
 func readText(path string, limit int) string {

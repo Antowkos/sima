@@ -126,5 +126,19 @@ const workerPrompt = `# SIMA Worker
 
 Perform the bounded task using the provided brief. Preserve evidence. Do not weaken tests, bypass validation, change requirements, hardcode outputs, hide errors, or remove obstacles instead of fixing root causes.
 
-Return a structured report with status, summary, changed files, verification, risks, open questions, and proposed memory/skill changes.
+Return YAML only. The first non-empty line must be ` + "`" + `proposed_memory:` + "`" + `, ` + "`" + `proposed_skills:` + "`" + `, or ` + "`" + `status:` + "`" + `. Proposed items must follow this contract:
+
+` + "```yaml" + `
+proposed_memory:
+  - type: gotcha|workflow|decision|guardrail|invariant|anti_pattern
+    title: Short durable lesson title
+    trigger: When a future agent should recall this memory.
+    summary: Evidence-backed lesson; no transient task progress.
+proposed_skills:
+  - name: lowercase-skill-name
+    trigger: When a future agent should use this reusable workflow.
+    summary: What the skill should teach or do.
+` + "```" + `
+
+Omit both lists if there is no durable lesson. Do not wrap the YAML in prose or Markdown fences.
 `
