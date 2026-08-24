@@ -4,7 +4,7 @@ Self Improvement Memory Agent.
 
 SIMA is a private Go CLI for running Claude Code/Codex through a personal self-improvement loop: project-local memory, skills, evidence, clean-session archivist checks, and safe auto-application of local improvements.
 
-Generated briefs include bounded snippets from active memory cards and skills, so applied lessons feed back into later runs without dumping raw artifacts into context. `sima propose` can turn structured worker JSON/YAML `proposed_memory` / `proposed_skills` output into reviewable candidates. JSON is preferred for real LLM backends. Fallback review candidates stay deferred; `sima learn` auto-applies only safe structured worker proposals. Malformed or incomplete structured output is marked `candidate_source: structured_invalid` with `candidate_errors`, never silently converted to fallback.
+Generated briefs include bounded snippets from active memory cards and skills, so applied lessons feed back into later runs without dumping raw artifacts into context. `sima propose` can turn structured worker JSON `proposed_memory` / `proposed_skills` output into reviewable candidates. Fallback review candidates stay deferred; `sima learn` auto-applies only safe structured worker proposals. Malformed or incomplete structured output is marked `candidate_source: structured_invalid` with `candidate_errors`, never silently converted to fallback.
 
 ## Current slice
 

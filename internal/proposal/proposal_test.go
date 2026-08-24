@@ -134,7 +134,7 @@ proposed_skills:
 	}
 }
 
-func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
+func TestGenerateRejectsYAMLStructuredStdout(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {
 		t.Fatalf("Init() error = %v", err)
@@ -149,9 +149,9 @@ func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
 	}
 	stdout := `proposed_memory:
   - type: workflow
-    title: Stdout YAML proposals are parsed
-    trigger: When worker stdout is a concise YAML report.
-    summary: SIMA can recover proposed memory from stdout when worker-report.yaml has no proposed fields.
+    title: Stdout YAML proposals are rejected
+    trigger: When worker stdout is YAML.
+    summary: SIMA requires JSON worker stdout.
 `
 	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
 		t.Fatal(err)
@@ -161,15 +161,18 @@ func TestGenerateUsesStructuredProposalsFromStdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if result.Candidates != 1 {
-		t.Fatalf("Candidates = %d, want 1", result.Candidates)
+	if result.Source != "structured_invalid" || result.Candidates != 0 {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 	data, err := os.ReadFile(result.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "Stdout YAML proposals are parsed") {
-		t.Fatalf("proposal missing stdout candidate:\n%s", data)
+	text := string(data)
+	for _, want := range []string{"candidate_source: structured_invalid", "worker stdout must be JSON"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
 	}
 }
 
@@ -237,7 +240,7 @@ func TestGenerateDoesNotFallbackOnMalformedStructuredStdout(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"candidate_source: structured_invalid", "candidate_errors:", "not valid YAML"} {
+	for _, want := range []string{"candidate_source: structured_invalid", "candidate_errors:", "worker stdout must be JSON"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("proposal missing %q:\n%s", want, text)
 		}

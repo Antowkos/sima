@@ -115,9 +115,8 @@ Backend command mapping for v0:
 
 Structured worker output contract:
 
-- worker stdout should be JSON only when it wants to propose durable knowledge;
-- YAML remains accepted for backwards compatibility, but JSON is preferred for real LLM backends because string escaping is less ambiguous;
-- JSON stdout must start with `{`; YAML stdout must start with `proposed_memory:`, `proposed_skills:`, or `status:`;
+- worker stdout must be JSON only when it wants to propose durable knowledge;
+- JSON stdout must start with `{`;
 - `proposed_memory` items require `type`, `title`, `trigger`, and `summary`;
 - `proposed_skills` items require `name`, `trigger`, and `summary`;
 - evidence may be omitted by the worker; SIMA fills candidate evidence from the bounded run bundle;
@@ -148,7 +147,7 @@ Minimal valid stdout:
 The v0 proposal is intentionally conservative:
 
 - it references task, brief, command, stdout, stderr, and `worker-report.yaml` as evidence;
-- it reads structured `proposed_memory` and `proposed_skills` from `worker-report.yaml` or YAML stdout when present;
+- it reads structured `proposed_memory` and `proposed_skills` from `worker-report.yaml` or JSON stdout when present;
 - it marks malformed/incomplete structured output as `candidate_source: structured_invalid` with `candidate_errors`, instead of silently falling back;
 - it fills missing candidate evidence from the run artifact bundle;
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;

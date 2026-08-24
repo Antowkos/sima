@@ -253,10 +253,7 @@ func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 		}
 		return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout looks like JSON but is not valid JSON"}}
 	}
-	if err := yaml.Unmarshal([]byte(text), &report); err == nil {
-		return report, parseResult{Structured: true}
-	}
-	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout contains proposed_memory/proposed_skills/status but is not valid YAML"}}
+	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout must be JSON and start with '{'"}}
 }
 
 func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence) ([]Candidate, []CandidateSkill) {

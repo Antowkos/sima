@@ -318,7 +318,7 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 		t.Fatalf("Init() error = %v", initErr)
 	}
 	worker := filepath.Join(root, "structured-worker.sh")
-	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'YAML'\nproposed_memory:\n  - type: workflow\n    title: Structured learn candidate\n    trigger: When sima learn receives structured worker proposals.\n    summary: sima learn may auto-apply safe structured personal proposals.\nYAML\n"), 0o755); err != nil {
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'JSON'\n{\"proposed_memory\":[{\"type\":\"workflow\",\"title\":\"Structured learn candidate\",\"trigger\":\"When sima learn receives structured worker proposals.\",\"summary\":\"sima learn may auto-apply safe structured personal proposals.\"}]}\nJSON\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var out, stderr bytes.Buffer
