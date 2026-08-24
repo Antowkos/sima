@@ -45,6 +45,13 @@ func Decide(projectRoot string, opts Options) (Result, error) {
 
 	decision, notes := decide(projectRoot, proposalPath, p)
 	p.ArchivistDecision = decision
+	if decision == "reject" {
+		p.Status = "rejected"
+	} else if decision == "defer" && p.Learning.Destination == "session_only" {
+		p.Status = "session_only"
+	} else if decision == "defer" {
+		p.Status = "deferred"
+	}
 	p.ArchivistAt = opts.Now.UTC().Format(time.RFC3339)
 	p.ArchivistNotes = notes
 	data, err := yaml.Marshal(p)
@@ -79,12 +86,52 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 		return "reject", []string{"proposal has no candidate memories or skills"}
 	}
 	if p.CandidateSource == "fallback" {
-		return "defer", []string{"fallback review candidates require structured worker proposals before auto-apply"}
+		return "defer", []string{"fallback review candidates stay session_only until a structured worker proposal exists"}
+	}
+	if decision, notes, ok := decideLearning(p); ok {
+		return decision, notes
 	}
 	if conflicts := activeConflicts(projectRoot, p); len(conflicts) > 0 {
 		return "defer", append([]string{"active output already exists; manual dedup/update needed"}, conflicts...)
 	}
 	return "apply", []string{"deterministic archivist approved: valid personal safe proposal with evidence and no active output conflict"}
+}
+
+func decideLearning(p proposal.Proposal) (string, []string, bool) {
+	if p.Learning.Destination == "" {
+		return "", nil, false
+	}
+	switch p.Learning.Destination {
+	case "session_only":
+		return "defer", []string{"learning destination is session_only; keep artifacts searchable without promoting active knowledge"}, true
+	case "reject":
+		return "reject", []string{"learning destination is reject"}, true
+	case "memory", "skill", "mixed":
+		var notes []string
+		q := p.Learning.Quality
+		if !q.Durable {
+			notes = append(notes, "learning quality failed: durable=false")
+		}
+		if !q.Triggerable {
+			notes = append(notes, "learning quality failed: triggerable=false")
+		}
+		if !q.EvidenceBacked {
+			notes = append(notes, "learning quality failed: evidence_backed=false")
+		}
+		if !q.NonTransient {
+			notes = append(notes, "learning quality failed: non_transient=false")
+		}
+		if !q.Reusable {
+			notes = append(notes, "learning quality failed: reusable=false")
+		}
+		notes = append(notes, p.Learning.Notes...)
+		if len(notes) > 0 {
+			return "defer", append([]string{"learning quality gate did not pass"}, notes...), true
+		}
+		return "", nil, false
+	default:
+		return "reject", []string{fmt.Sprintf("unsupported learning destination %q", p.Learning.Destination)}, true
+	}
 }
 
 func activeConflicts(projectRoot string, p proposal.Proposal) []string {

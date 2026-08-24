@@ -46,8 +46,66 @@ func TestDecideRejectsSuspiciousProposal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "archivist_decision: reject") {
+	if !strings.Contains(string(data), "archivist_decision: reject") || !strings.Contains(string(data), "status: rejected") {
 		t.Fatalf("proposal not rejected:\n%s", data)
+	}
+}
+
+func TestDecideMarksFallbackAsSessionOnly(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if err := config.AddBackend(root, "worker", config.BackendProfile{Kind: "codex", Executable: "/bin/echo"}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+	runResult, err := runner.Run(root, runner.Options{BackendName: "worker", Task: "fallback proposal", Now: time.Date(2026, 8, 23, 12, 30, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	proposalResult, err := proposal.Generate(root, proposal.Options{FromRun: runResult.RunID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	result, err := Decide(root, Options{Target: proposalResult.Path})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	if result.Decision != "defer" || !strings.Contains(strings.Join(result.Notes, "\n"), "session_only") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(proposalResult.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: session_only") {
+		t.Fatalf("proposal not marked session_only:\n%s", data)
+	}
+}
+
+func TestDecideDefersFailedLearningQuality(t *testing.T) {
+	root, proposalPath := createProposal(t, "archive low quality proposal", false)
+	data, err := os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(data), "durable: true", "durable: false", 1)
+	if err := os.WriteFile(proposalPath, []byte(updated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Decide(root, Options{Target: proposalPath})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	if result.Decision != "defer" || !strings.Contains(strings.Join(result.Notes, "\n"), "durable=false") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err = os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: deferred") {
+		t.Fatalf("proposal not deferred:\n%s", data)
 	}
 }
 

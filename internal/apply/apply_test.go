@@ -64,6 +64,11 @@ func createProposal(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
+	reportPath := filepath.Join(root, ".sima", "personal", "runs", runResult.RunID, "worker-report.yaml")
+	report := "run_id: " + runResult.RunID + "\nstatus: success\nexit_code: 0\ntask: apply proposal\nproposed_memory:\n  - type: workflow\n    title: Apply approved structured proposal\n    trigger: When a safe structured SIMA proposal has archivist approval.\n    summary: SIMA apply promotes approved structured personal proposals into active memory cards with evidence.\n"
+	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	proposalResult, err := proposal.Generate(root, proposal.Options{FromRun: runResult.RunID})
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)

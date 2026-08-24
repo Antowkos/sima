@@ -74,6 +74,12 @@ func Apply(projectRoot string, opts Options) (Result, error) {
 	if p.ArchivistDecision != "apply" {
 		return Result{}, fmt.Errorf("proposal archivist_decision must be apply, got %q", p.ArchivistDecision)
 	}
+	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, []string{"memory", "skill", "mixed"}) {
+		return Result{}, fmt.Errorf("proposal learning.destination must be memory, skill, or mixed, got %q", p.Learning.Destination)
+	}
+	if p.Learning.Destination != "" && !learningQualityPasses(p.Learning.Quality) {
+		return Result{}, fmt.Errorf("proposal learning quality gate did not pass")
+	}
 	if len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
 		return Result{}, fmt.Errorf("proposal has no candidate memories or skills")
 	}
@@ -225,6 +231,19 @@ func reviewItem(projectRoot, path string) review.Item {
 		}
 	}
 	return review.Item{Problems: []string{"proposal not found in review queue"}}
+}
+
+func learningQualityPasses(q proposal.LearningQuality) bool {
+	return q.Durable && q.Triggerable && q.EvidenceBacked && q.NonTransient && q.Reusable
+}
+
+func oneOf(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func uniqueID(proposalID, title string, index int) string {

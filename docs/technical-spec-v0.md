@@ -172,7 +172,7 @@ learning:
   notes: []
 ```
 
-This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary.
+This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary. The archivist uses this boundary: only `memory`, `skill`, and `mixed` destinations with passing quality flags can auto-apply.
 
 ## Proposal review
 
@@ -189,7 +189,7 @@ SIMA borrows the useful parts of Hermes' learning model for quality control:
 The v0 review gate marks an item blocked when:
 
 - required fields are missing;
-- proposal operation/status/decision/safety values are unsupported;
+- proposal operation/status/decision/safety/learning values are unsupported;
 - evidence pointers are missing or malformed;
 - candidate memories/skills lack triggerable summaries or evidence;
 - candidate memory type is not one of `decision`, `invariant`, `gotcha`, `workflow`, `guardrail`, `anti_pattern`, or `open_question`;
@@ -220,9 +220,11 @@ When gates pass, SIMA writes candidate memories to `.sima/personal/memory/cards/
 
 Decision rules:
 
-- `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one structured candidate memory/skill, and no active output file conflict exists.
-- `reject`: proposal is invalid, suspicious/unsafe, or has no candidates.
-- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback review candidate, or needs manual dedup/update because an active output already exists.
+- `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one structured candidate memory/skill, `learning.destination` is `memory`, `skill`, or `mixed`, all learning quality flags pass, and no active output file conflict exists.
+- `reject`: proposal is invalid, suspicious/unsafe, has no candidates, or has `learning.destination: reject`.
+- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback/session-only review candidate, fails learning quality, or needs manual dedup/update because an active output already exists.
+
+When the archivist defers fallback/session-only learning it marks the proposal `status: session_only`; other deferred proposals become `status: deferred`, and rejected proposals become `status: rejected`. `apply` decisions leave the proposal as `candidate` until `sima apply` performs the mutation and marks it `applied`.
 
 `apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
 

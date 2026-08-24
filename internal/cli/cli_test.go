@@ -200,6 +200,15 @@ func TestApplyCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
+	runEntries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "runs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(root, ".sima", "personal", "runs", runEntries[0].Name(), "worker-report.yaml")
+	report := "run_id: " + runEntries[0].Name() + "\nstatus: success\nexit_code: 0\ntask: capture artifacts\nproposed_memory:\n  - type: workflow\n    title: CLI apply approved structured proposal\n    trigger: When the SIMA CLI applies an archivist-approved structured proposal.\n    summary: The apply command promotes structured personal proposal candidates after archivist approval.\n"
+	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	out.Reset()
 	stderr.Reset()
 	code = Run([]string{"sima", "propose", "--from-run", "last", "--path", root}, &out, &stderr)
@@ -262,7 +271,7 @@ func TestArchivistCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("archivist code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	if !strings.Contains(out.String(), "Archivist decision: defer") || !strings.Contains(out.String(), "fallback review candidates require structured worker proposals") {
+	if !strings.Contains(out.String(), "Archivist decision: defer") || !strings.Contains(out.String(), "fallback review candidates stay session_only") {
 		t.Fatalf("unexpected archivist output: %q", out.String())
 	}
 }
@@ -307,7 +316,7 @@ func TestLearnCommandDefersFallbackCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "status: candidate") || !strings.Contains(string(data), "archivist_decision: defer") || !strings.Contains(string(data), "candidate_source: fallback") {
+	if !strings.Contains(string(data), "status: session_only") || !strings.Contains(string(data), "archivist_decision: defer") || !strings.Contains(string(data), "candidate_source: fallback") {
 		t.Fatalf("fallback proposal not left deferred:\n%s", data)
 	}
 }

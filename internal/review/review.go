@@ -101,7 +101,7 @@ func validate(p proposal.Proposal) []string {
 	if !oneOf(p.Operation, []string{"create", "update", "deprecate", "supersede"}) {
 		problems = append(problems, "unsupported operation")
 	}
-	if !oneOf(p.Status, []string{"candidate", "applied", "rejected", "deferred"}) {
+	if !oneOf(p.Status, []string{"candidate", "applied", "rejected", "deferred", "session_only"}) {
 		problems = append(problems, "unsupported status")
 	}
 	if !oneOf(p.ArchivistDecision, []string{"apply", "reject", "defer"}) {
