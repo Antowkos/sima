@@ -189,7 +189,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 			proposal.CandidateSource = "structured"
 		}
 	}
-	proposal.Learning = classifyLearning(proposal)
+	proposal.Learning = classifyLearning(projectRoot, proposal)
 
 	candidateDir := filepath.Join(projectRoot, ".sima", "personal", "memory", "candidates")
 	if err := os.MkdirAll(candidateDir, 0o755); err != nil {
@@ -321,7 +321,7 @@ func structuredCandidateErrors(report, stdoutReport WorkerReport) []string {
 	return problems
 }
 
-func classifyLearning(p Proposal) Learning {
+func classifyLearning(projectRoot string, p Proposal) Learning {
 	learning := Learning{
 		Destination: "session_only",
 		Operation:   p.Operation,
@@ -401,7 +401,153 @@ func classifyLearning(p Proposal) Learning {
 	if skillCount == 0 {
 		learning.Quality.Reusable = true
 	}
+	learning = inferLifecycleTarget(projectRoot, learning, p)
 	return learning
+}
+
+type activeMemoryRef struct {
+	ID          string
+	Path        string
+	TitleSlug   string
+	TriggerSlug string
+}
+
+type activeSkillRef struct {
+	ID          string
+	Path        string
+	NameSlug    string
+	TriggerSlug string
+}
+
+func inferLifecycleTarget(projectRoot string, learning Learning, p Proposal) Learning {
+	if learning.Operation != "create" || !learningQualityPasses(learning.Quality) {
+		return learning
+	}
+	if len(p.CandidateMemories) == 1 && len(p.CandidateSkills) == 0 {
+		candidate := p.CandidateMemories[0]
+		if match, ok := matchActiveMemory(projectRoot, candidate); ok {
+			learning.Operation = "update"
+			learning.Target = LearningTarget{Kind: "memory", Path: match.Path, ID: match.ID}
+			learning.Notes = append(learning.Notes, "similar active memory found; classify as update")
+		}
+	}
+	if len(p.CandidateSkills) == 1 && len(p.CandidateMemories) == 0 {
+		candidate := p.CandidateSkills[0]
+		if match, ok := matchActiveSkill(projectRoot, candidate); ok {
+			learning.Operation = "update"
+			learning.Target = LearningTarget{Kind: "skill", Path: match.Path, ID: match.ID}
+			learning.Notes = append(learning.Notes, "similar active skill found; classify as update")
+		}
+	}
+	return learning
+}
+
+func matchActiveMemory(projectRoot string, c Candidate) (activeMemoryRef, bool) {
+	candidateTitle := slug(c.Title)
+	candidateTrigger := slug(c.Trigger)
+	for _, active := range readActiveMemory(projectRoot) {
+		if candidateTitle != "" && candidateTitle == active.TitleSlug {
+			return active, true
+		}
+		if candidateTrigger != "" && candidateTrigger == active.TriggerSlug {
+			return active, true
+		}
+	}
+	return activeMemoryRef{}, false
+}
+
+func matchActiveSkill(projectRoot string, c CandidateSkill) (activeSkillRef, bool) {
+	candidateName := slug(c.Name)
+	candidateTrigger := slug(c.Trigger)
+	for _, active := range readActiveSkills(projectRoot) {
+		if candidateName != "" && candidateName == active.NameSlug {
+			return active, true
+		}
+		if candidateTrigger != "" && candidateTrigger == active.TriggerSlug {
+			return active, true
+		}
+	}
+	return activeSkillRef{}, false
+}
+
+func readActiveMemory(projectRoot string) []activeMemoryRef {
+	dir := filepath.Join(projectRoot, ".sima", "personal", "memory", "cards")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var refs []activeMemoryRef
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAML(entry.Name()) {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var card struct {
+			ID      string `yaml:"id"`
+			Title   string `yaml:"title"`
+			Trigger string `yaml:"trigger"`
+			Status  string `yaml:"status"`
+		}
+		if err := yaml.Unmarshal(data, &card); err != nil || !isActiveStatus(card.Status) {
+			continue
+		}
+		refs = append(refs, activeMemoryRef{ID: card.ID, Path: rel(projectRoot, path), TitleSlug: slug(card.Title), TriggerSlug: slug(card.Trigger)})
+	}
+	return refs
+}
+
+func readActiveSkills(projectRoot string) []activeSkillRef {
+	dir := filepath.Join(projectRoot, ".sima", "personal", "skills", "active")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var refs []activeSkillRef
+	for _, entry := range entries {
+		if entry.IsDir() || strings.ToLower(filepath.Ext(entry.Name())) != ".md" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		refs = append(refs, activeSkillRef{ID: name, Path: rel(projectRoot, path), NameSlug: slug(name), TriggerSlug: slug(extractSkillTrigger(string(data)))})
+	}
+	return refs
+}
+
+func extractSkillTrigger(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "## Trigger" {
+			for _, candidate := range lines[i+1:] {
+				candidate = strings.TrimSpace(candidate)
+				if candidate != "" && !strings.HasPrefix(candidate, "#") {
+					return candidate
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func isActiveStatus(status string) bool {
+	return status == "" || status == "active"
+}
+
+func isYAML(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".yaml" || ext == ".yml"
+}
+
+func learningQualityPasses(q LearningQuality) bool {
+	return q.Durable && q.Triggerable && q.EvidenceBacked && q.NonTransient && q.Reusable
 }
 
 func looksTriggerable(text string) bool {
@@ -497,6 +643,23 @@ func firstNonEmpty(text string) string {
 		}
 	}
 	return ""
+}
+
+func slug(value string) string {
+	value = strings.ToLower(value)
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if ok {
+			b.WriteRune(r)
+			lastDash = false
+		} else if !lastDash {
+			b.WriteRune('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func evidenceFor(projectRoot, runDir string) []Evidence {

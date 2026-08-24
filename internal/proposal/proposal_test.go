@@ -212,6 +212,113 @@ func TestGenerateUsesStructuredJSONFromStdout(t *testing.T) {
 	}
 }
 
+func TestGenerateClassifiesSimilarActiveMemoryAsUpdate(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	activeDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
+	if err := os.MkdirAll(activeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	active := `id: existing-memory
+status: active
+type: workflow
+title: JSON proposals are parsed
+trigger: When worker stdout is JSON.
+summary: Existing active card.
+`
+	if err := os.WriteFile(filepath.Join(activeDir, "existing-memory.yaml"), []byte(active), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runID := "20260824-171500-update"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: json stdout proposals\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout := `{"proposed_memory":[{"type":"workflow","title":"JSON proposals are parsed","trigger":"When worker stdout is JSON.","summary":"SIMA should update an existing card when a structured candidate has the same trigger."}]}`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"destination: memory", "operation: update", "kind: memory", "path: .sima/personal/memory/cards/existing-memory.yaml", "id: existing-memory", "similar active memory found; classify as update"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, data)
+		}
+	}
+}
+
+func TestGenerateClassifiesSimilarActiveSkillAsUpdate(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	activeDir := filepath.Join(root, ".sima", "personal", "skills", "active")
+	if err := os.MkdirAll(activeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	active := `---
+name: structured-proposal-skill
+status: active
+---
+# structured-proposal-skill
+
+## Trigger
+
+When worker stdout proposes reusable skills.
+`
+	if err := os.WriteFile(filepath.Join(activeDir, "structured-proposal-skill.md"), []byte(active), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runID := "20260824-171600-skill-update"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	report := `run_id: 20260824-171600-skill-update
+status: success
+exit_code: 0
+task: structured skill update
+proposed_skills:
+  - name: structured-proposal-skill
+    trigger: When worker stdout proposes reusable skills.
+    summary: Update the existing skill when a structured candidate describes the same reusable workflow.
+`
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"destination: skill", "operation: update", "kind: skill", "path: .sima/personal/skills/active/structured-proposal-skill.md", "id: structured-proposal-skill", "similar active skill found; classify as update"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, data)
+		}
+	}
+}
+
 func TestGenerateUsesClaudeStructuredOutputWrapper(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {

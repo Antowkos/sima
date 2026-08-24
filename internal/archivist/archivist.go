@@ -109,26 +109,25 @@ func decideLearning(p proposal.Proposal) (string, []string, bool) {
 	case "reject":
 		return "reject", []string{"learning destination is reject"}, true
 	case "memory", "skill", "mixed":
-		var notes []string
+		var failures []string
 		q := p.Learning.Quality
 		if !q.Durable {
-			notes = append(notes, "learning quality failed: durable=false")
+			failures = append(failures, "learning quality failed: durable=false")
 		}
 		if !q.Triggerable {
-			notes = append(notes, "learning quality failed: triggerable=false")
+			failures = append(failures, "learning quality failed: triggerable=false")
 		}
 		if !q.EvidenceBacked {
-			notes = append(notes, "learning quality failed: evidence_backed=false")
+			failures = append(failures, "learning quality failed: evidence_backed=false")
 		}
 		if !q.NonTransient {
-			notes = append(notes, "learning quality failed: non_transient=false")
+			failures = append(failures, "learning quality failed: non_transient=false")
 		}
 		if !q.Reusable {
-			notes = append(notes, "learning quality failed: reusable=false")
+			failures = append(failures, "learning quality failed: reusable=false")
 		}
-		notes = append(notes, p.Learning.Notes...)
-		if len(notes) > 0 {
-			return "defer", append([]string{"learning quality gate did not pass"}, notes...), true
+		if len(failures) > 0 {
+			return "defer", append([]string{"learning quality gate did not pass"}, append(failures, p.Learning.Notes...)...), true
 		}
 		return "", nil, false
 	default:
