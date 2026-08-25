@@ -102,7 +102,7 @@ Current v0 slice:
   lint     Check SIMA knowledge lifecycle metadata, candidates, and target paths
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
-  learn    Run the full gated self-improvement loop: run, propose, archivist, apply
+  learn    Run the full gated self-improvement loop: run, propose, archivist, apply-ready, apply
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
   candidates List, inspect, and clean candidate proposals
@@ -422,7 +422,18 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	applyResult, err := apply.Apply(abs, apply.Options{Target: proposalID})
+	ready, err := candidates.ApplyReady(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "learn apply-ready check failed: %v\n", err)
+		return 1
+	}
+	readyItem, ok := findCandidateItem(ready, proposalID)
+	if !ok {
+		fmt.Fprintln(stdout, "Learn stopped: archivist approved proposal but apply-ready gates did not pass; no apply attempted")
+		return 1
+	}
+	fmt.Fprintln(stdout, "Learn auto-apply: proposal passed apply-ready gates")
+	applyResult, err := apply.Apply(abs, apply.Options{Target: readyItem.Path})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn apply failed: %v\n", err)
 		return 1
@@ -433,6 +444,15 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "Learn complete: applied safe approved knowledge")
 	return 0
+}
+
+func findCandidateItem(items []candidates.Item, id string) (candidates.Item, bool) {
+	for _, item := range items {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return candidates.Item{}, false
 }
 
 func runPropose(args []string, stdout, stderr io.Writer) int {

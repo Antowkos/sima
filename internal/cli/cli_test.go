@@ -356,7 +356,7 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	for _, want := range []string{"Run ", "Proposal written:", "Archivist backend: reviewer", "Archivist decision: apply", "Applied proposal:", "Learn complete:"} {
+	for _, want := range []string{"Run ", "Proposal written:", "Archivist backend: reviewer", "Archivist decision: apply", "Learn auto-apply: proposal passed apply-ready gates", "Applied proposal:", "Learn complete:"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("learn output missing %q: %q", want, out.String())
 		}
