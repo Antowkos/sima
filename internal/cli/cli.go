@@ -11,6 +11,7 @@ import (
 	"github.com/antowkos/sima/internal/archivist"
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
+	"github.com/antowkos/sima/internal/catalog"
 	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
@@ -53,6 +54,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runApply(args[2:], stdout, stderr)
 	case "archivist":
 		return runArchivist(args[2:], stdout, stderr)
+	case "memory":
+		return runCatalogCommand("memory", args[2:], stdout, stderr)
+	case "skill":
+		return runCatalogCommand("skill", args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", args[1])
 		printHelp(stderr)
@@ -73,6 +78,8 @@ Usage:
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
   sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
+  sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
+  sima skill list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -751,6 +758,51 @@ func runBackendAdd(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "Added backend %q (%s)\n", name, profile.Kind)
+	return 0
+}
+
+func runCatalogCommand(kind string, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] != "list" {
+		fmt.Fprintf(stderr, "usage: sima %s list [--status <active|deprecated|superseded|archived|all>] [--path <path>]\n", kind)
+		return 2
+	}
+	root := "."
+	status := "active"
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--status":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--status requires a value")
+				return 2
+			}
+			i++
+			status = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	items, err := catalog.List(abs, catalog.Options{Kind: kind, Status: status})
+	if err != nil {
+		fmt.Fprintf(stderr, "%s list failed: %v\n", kind, err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "STATUS\tSCOPE\tKIND\tTITLE\tPATH")
+	for _, item := range items {
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", item.Status, item.Scope, item.Kind, item.Title, item.Path)
+	}
 	return 0
 }
 

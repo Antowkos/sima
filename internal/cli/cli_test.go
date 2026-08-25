@@ -384,6 +384,48 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	}
 }
 
+func TestMemoryAndSkillListCommandsShowLifecycleStatus(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	memoryDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
+	if err := os.WriteFile(filepath.Join(memoryDir, "active.yaml"), []byte("id: active\nstatus: active\ntitle: Active Memory\nsummary: visible\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memoryDir, "deprecated.yaml"), []byte("id: old\nstatus: deprecated\ntitle: Deprecated Memory\nsummary: hidden\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, ".sima", "personal", "skills", "active")
+	if err := os.WriteFile(filepath.Join(skillDir, "active-skill.md"), []byte("---\nname: active-skill\nstatus: active\n---\n# Active Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "superseded-skill.md"), []byte("---\nname: superseded-skill\nstatus: superseded\n---\n# Superseded Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "memory", "list", "--status", "all", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("memory list code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"STATUS\tSCOPE\tKIND\tTITLE\tPATH", "active\tpersonal\tmemory\tActive Memory\t.sima/personal/memory/cards/active.yaml", "deprecated\tpersonal\tmemory\tDeprecated Memory\t.sima/personal/memory/cards/deprecated.yaml"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("memory list missing %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "skill", "list", "--status", "active", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("skill list code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "active\tpersonal\tskill\tactive-skill\t.sima/personal/skills/active/active-skill.md") || strings.Contains(out.String(), "superseded-skill") {
+		t.Fatalf("unexpected active skill list:\n%s", out.String())
+	}
+}
+
 func TestBackendAddListDoctor(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
