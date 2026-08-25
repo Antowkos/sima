@@ -68,7 +68,7 @@ sima brief "follow-up task" --path .
 For each pilot run, collect:
 
 1. **Setup friction** — what command/config step was unclear?
-2. **Backend friction** — did Claude/Codex executable/config resolution work, and did the first real `sima learn` run produce usable structured output?
+2. **Backend friction** — did Claude/Codex executable/config resolution work, did Codex auth pass `codex doctor`, and did the first real `sima learn` run produce usable structured output?
 3. **Brief quality** — was retrieved memory/skill context useful or noisy?
 4. **Proposal quality** — did proposed memory/skill feel durable, triggerable, and non-transient?
 5. **Archivist quality** — did apply/defer/reject match human judgment?
@@ -89,7 +89,8 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] real Claude Code auto-learning dogfood completed on a small task;
   - result: `claude-schema` completed worker → structured proposal → clean archivist → apply-ready → auto-apply;
   - follow-up: dogfood exposed duplicate mirrored `result`/`structured_output` candidates from Claude JSON Schema output; parser now prefers validated `structured_output` unless `result` contains an explicit lifecycle operation.
-- [ ] real Codex auto-learning dogfood completed on a small task.
+- [ ] real Codex auto-learning dogfood completed on a small task;
+  - latest attempt reached real Codex CLI `0.149.1` via `npx @openai/codex`, but stopped before worker output because `codex doctor` reported missing credentials and `sima learn` failed with `401 Unauthorized`; run `codex login` or configure a supported API key before retrying.
 
 ## Team memory policy for alpha
 
