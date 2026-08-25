@@ -45,6 +45,7 @@ sima doctor .
 sima backend add <name> --kind <claude-code|codex> --executable <path>
 sima brief "small real task" --path .
 sima learn --backend <name> --task "small real task" --path .
+sima learn --backend <name> --task "small real task" --json --path .
 sima candidates list --status all --path .
 sima memory list --status active --path .
 sima skill list --status active --path .
@@ -80,8 +81,8 @@ Before inviting more than 1–2 technical teammates, complete:
 
 - [x] config-driven learn defaults in `.sima/config.yaml`;
 - [x] `sima doctor` covers config, directories, auto-learning defaults, backend executables, lint, and candidate queue health;
-- [ ] `sima learn` prints a concise final summary;
-- [ ] `sima learn --json` or equivalent machine-readable summary exists for wrappers;
+- [x] `sima learn` prints a concise final summary;
+- [x] `sima learn --json` emits a machine-readable summary for wrappers;
 - [ ] short 5-minute setup guide exists;
 - [ ] real Claude Code auto-learning dogfood completed on a small task;
 - [ ] real Codex auto-learning dogfood completed on a small task.
@@ -107,14 +108,10 @@ The team alpha is successful when:
 - `sima lint` remains clean after pilot runs;
 - no secrets or transient task logs are promoted to active memory.
 
-## Suggested implementation order
+## Suggested remaining implementation order
 
-1. Config defaults:
-   - `learn.auto_apply`;
-   - `learn.auto_cleanup_deferred`;
-   - CLI flags override config.
-2. `sima doctor` alpha preflight.
-3. `sima learn` final summary and `--json`.
-4. 5-minute setup guide.
-5. Managed instructions for Claude Code / Codex.
-6. Team-scope review-required flow.
+1. 5-minute setup guide.
+2. Managed instructions for Claude Code / Codex.
+3. Real Claude Code auto-learning dogfood on a small task.
+4. Real Codex auto-learning dogfood on a small task.
+5. Team-scope review-required flow.

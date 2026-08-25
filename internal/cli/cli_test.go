@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -419,6 +420,56 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "status: applied") || !strings.Contains(string(data), "archivist_decision: apply") || !strings.Contains(string(data), "candidate_source: structured") {
 		t.Fatalf("proposal not marked applied:\n%s", data)
+	}
+}
+
+func TestLearnCommandJSONSummary(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	worker := filepath.Join(root, "structured-worker.sh")
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'JSON'\n{\"proposed_memory\":[{\"type\":\"workflow\",\"title\":\"Structured JSON learn candidate\",\"trigger\":\"When sima learn --json runs.\",\"summary\":\"sima learn --json should emit a machine-readable final summary.\"}]}\nJSON\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reviewer := filepath.Join(root, "reviewer.sh")
+	reviewerJSON := `{"decision":"apply","learning":{"destination":"memory","operation":"create","quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["model reviewer approved structured learning"]},"notes":["clean reviewer approved"]}`
+	if err := os.WriteFile(reviewer, []byte("#!/bin/sh\nprintf '%s\\n' '"+reviewerJSON+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "structured", "--kind", "codex", "--executable", worker, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "backend", "add", "reviewer", "--kind", "claude-code", "--executable", reviewer, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("reviewer backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "structured", "--archivist-backend", "reviewer", "--task", "capture json structured lesson", "--json", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("learn --json code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if strings.Contains(out.String(), "Run ") || strings.Contains(out.String(), "Learn complete:") {
+		t.Fatalf("json output should not include human log lines: %s", out.String())
+	}
+	var summary struct {
+		Status            string   `json:"status"`
+		Outcome           string   `json:"outcome"`
+		Candidates        int      `json:"candidates"`
+		ApplyReady        bool     `json:"apply_ready"`
+		AppliedPaths      []string `json:"applied_paths"`
+		ArchivistDecision string   `json:"archivist_decision"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &summary); err != nil {
+		t.Fatalf("json summary parse failed: %v\n%s", err, out.String())
+	}
+	if summary.Status != "completed" || summary.Outcome != "applied" || summary.Candidates != 1 || !summary.ApplyReady || len(summary.AppliedPaths) != 1 || summary.ArchivistDecision != "apply" {
+		t.Fatalf("unexpected json summary: %#v\n%s", summary, out.String())
 	}
 }
 

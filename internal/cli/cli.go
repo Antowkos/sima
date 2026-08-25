@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -80,7 +81,7 @@ Usage:
   sima lint [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
-  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--path <path>]
+  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -391,6 +392,7 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	backendName := ""
 	archivistBackendName := ""
 	task := ""
+	jsonOutput := false
 	var autoApplyOverride *bool
 	var autoCleanupDeferredOverride *bool
 	for i := 0; i < len(args); i++ {
@@ -432,18 +434,26 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 			autoCleanupDeferredOverride = boolPtr(true)
 		case "--no-auto-cleanup-deferred":
 			autoCleanupDeferredOverride = boolPtr(false)
+		case "--json":
+			jsonOutput = true
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
 			return 2
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path <path>]")
 		return 2
 	}
+	humanOut := stdout
+	if jsonOutput {
+		humanOut = io.Discard
+	}
+	summary := learnSummary{Status: "running", Outcome: "started", Backend: backendName, ArchivistBackend: archivistBackendName, Task: task}
 	if archivistBackendName == "" {
 		archivistBackendName = backendName
 	}
+	summary.ArchivistBackend = archivistBackendName
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		fmt.Fprintf(stderr, "resolve path: %v\n", err)
@@ -462,16 +472,25 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	if autoCleanupDeferredOverride != nil {
 		autoCleanupDeferred = *autoCleanupDeferredOverride
 	}
+	summary.AutoApply = autoApply
+	summary.AutoCleanupDeferred = autoCleanupDeferred
 
 	runResult, err := runner.Run(abs, runner.Options{BackendName: backendName, Task: task})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn run failed: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "Run %s complete: %s\n", runResult.RunID, runResult.RunDir)
-	fmt.Fprintf(stdout, "Exit code: %d\n", runResult.ExitCode)
+	summary.RunID = runResult.RunID
+	summary.RunDir = runResult.RunDir
+	summary.ExitCode = runResult.ExitCode
+	fmt.Fprintf(humanOut, "Run %s complete: %s\n", runResult.RunID, runResult.RunDir)
+	fmt.Fprintf(humanOut, "Exit code: %d\n", runResult.ExitCode)
 	if runResult.ExitCode != 0 {
-		fmt.Fprintln(stdout, "Learn stopped: run failed; no proposal, archivist decision, or apply attempted")
+		summary.Status = "failed"
+		summary.Outcome = "run_failed"
+		summary.StoppedReason = "run failed; no proposal, archivist decision, or apply attempted"
+		fmt.Fprintln(humanOut, "Learn stopped: run failed; no proposal, archivist decision, or apply attempted")
+		writeLearnSummary(stdout, summary, jsonOutput)
 		return 1
 	}
 
@@ -481,40 +500,64 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	proposalID := filepath.Base(strings.TrimSuffix(proposalResult.Path, ".yaml"))
-	fmt.Fprintf(stdout, "Proposal written: %s\n", proposalResult.Path)
-	fmt.Fprintf(stdout, "Candidates: %d\n", proposalResult.Candidates)
+	summary.ProposalPath = proposalResult.Path
+	summary.ProposalID = proposalID
+	summary.Candidates = proposalResult.Candidates
+	summary.CandidateSource = proposalResult.Source
+	summary.Safety = proposalResult.Safety
+	fmt.Fprintf(humanOut, "Proposal written: %s\n", proposalResult.Path)
+	fmt.Fprintf(humanOut, "Candidates: %d\n", proposalResult.Candidates)
 	if proposalResult.Source != "" {
-		fmt.Fprintf(stdout, "Candidate source: %s\n", proposalResult.Source)
+		fmt.Fprintf(humanOut, "Candidate source: %s\n", proposalResult.Source)
 	}
-	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
+	fmt.Fprintf(humanOut, "Safety: %s\n", proposalResult.Safety)
 	if proposalResult.Candidates == 0 && proposalResult.Source != "structured" {
-		fmt.Fprintln(stdout, "Learn stopped: no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted")
-		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+		summary.Status = "stopped"
+		summary.Outcome = "no_structured_learning"
+		summary.StoppedReason = "no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted"
+		fmt.Fprintln(humanOut, "Learn stopped: no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted")
+		updated, code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, humanOut, stderr)
+		summary.CleanupUpdated = updated
+		writeLearnSummary(stdout, summary, jsonOutput)
+		if code != 0 {
 			return code
 		}
 		return 0
 	}
 	if proposalResult.Source != "structured" {
-		fmt.Fprintf(stdout, "Learn stopped: candidate source is %s; no archivist review or apply attempted\n", proposalResult.Source)
-		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+		summary.Status = "stopped"
+		summary.Outcome = "unsupported_candidate_source"
+		summary.StoppedReason = fmt.Sprintf("candidate source is %s; no archivist review or apply attempted", proposalResult.Source)
+		fmt.Fprintf(humanOut, "Learn stopped: candidate source is %s; no archivist review or apply attempted\n", proposalResult.Source)
+		updated, code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, humanOut, stderr)
+		summary.CleanupUpdated = updated
+		writeLearnSummary(stdout, summary, jsonOutput)
+		if code != 0 {
 			return code
 		}
 		return 0
 	}
 
-	fmt.Fprintf(stdout, "Archivist backend: %s\n", archivistBackendName)
+	fmt.Fprintf(humanOut, "Archivist backend: %s\n", archivistBackendName)
 	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID, BackendName: archivistBackendName})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn archivist failed: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "Archivist decision: %s\n", archivistResult.Decision)
+	summary.ArchivistDecision = archivistResult.Decision
+	fmt.Fprintf(humanOut, "Archivist decision: %s\n", archivistResult.Decision)
 	for _, note := range archivistResult.Notes {
-		fmt.Fprintf(stdout, "  - %s\n", note)
+		fmt.Fprintf(humanOut, "  - %s\n", note)
 	}
 	if archivistResult.Decision != "apply" {
-		fmt.Fprintf(stdout, "Learn stopped: archivist decision is %s; no apply attempted\n", archivistResult.Decision)
-		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+		summary.Status = "stopped"
+		summary.Outcome = "archivist_" + archivistResult.Decision
+		summary.StoppedReason = fmt.Sprintf("archivist decision is %s; no apply attempted", archivistResult.Decision)
+		fmt.Fprintf(humanOut, "Learn stopped: archivist decision is %s; no apply attempted\n", archivistResult.Decision)
+		updated, code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, humanOut, stderr)
+		summary.CleanupUpdated = updated
+		writeLearnSummary(stdout, summary, jsonOutput)
+		if code != 0 {
 			return code
 		}
 		return 0
@@ -527,12 +570,21 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	}
 	readyItem, ok := findCandidateItem(ready, proposalID)
 	if !ok {
-		fmt.Fprintln(stdout, "Learn stopped: archivist approved proposal but apply-ready gates did not pass; no apply attempted")
+		summary.Status = "failed"
+		summary.Outcome = "apply_ready_failed"
+		summary.StoppedReason = "archivist approved proposal but apply-ready gates did not pass; no apply attempted"
+		fmt.Fprintln(humanOut, "Learn stopped: archivist approved proposal but apply-ready gates did not pass; no apply attempted")
+		writeLearnSummary(stdout, summary, jsonOutput)
 		return 1
 	}
-	fmt.Fprintln(stdout, "Learn auto-apply: proposal passed apply-ready gates")
+	summary.ApplyReady = true
+	fmt.Fprintln(humanOut, "Learn auto-apply: proposal passed apply-ready gates")
 	if !autoApply {
-		fmt.Fprintf(stdout, "Learn stopped: auto_apply disabled; proposal remains pending at %s\n", readyItem.Path)
+		summary.Status = "stopped"
+		summary.Outcome = "auto_apply_disabled"
+		summary.StoppedReason = "auto_apply disabled; proposal remains pending"
+		fmt.Fprintf(humanOut, "Learn stopped: auto_apply disabled; proposal remains pending at %s\n", readyItem.Path)
+		writeLearnSummary(stdout, summary, jsonOutput)
 		return 0
 	}
 	applyResult, err := apply.Apply(abs, apply.Options{Target: readyItem.Path})
@@ -540,12 +592,72 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "learn apply failed: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "Applied proposal: %s\n", applyResult.ProposalPath)
+	summary.AppliedProposal = applyResult.ProposalPath
+	summary.AppliedPaths = applyResult.Applied
+	summary.Status = "completed"
+	summary.Outcome = "applied"
+	fmt.Fprintf(humanOut, "Applied proposal: %s\n", applyResult.ProposalPath)
 	for _, path := range applyResult.Applied {
-		fmt.Fprintf(stdout, "  - %s\n", path)
+		fmt.Fprintf(humanOut, "  - %s\n", path)
 	}
-	fmt.Fprintln(stdout, "Learn complete: applied safe approved knowledge")
+	fmt.Fprintln(humanOut, "Learn complete: applied safe approved knowledge")
+	writeLearnSummary(stdout, summary, jsonOutput)
 	return 0
+}
+
+type learnSummary struct {
+	Status              string   `json:"status"`
+	Outcome             string   `json:"outcome"`
+	Task                string   `json:"task,omitempty"`
+	Backend             string   `json:"backend,omitempty"`
+	ArchivistBackend    string   `json:"archivist_backend,omitempty"`
+	AutoApply           bool     `json:"auto_apply"`
+	AutoCleanupDeferred bool     `json:"auto_cleanup_deferred"`
+	RunID               string   `json:"run_id,omitempty"`
+	RunDir              string   `json:"run_dir,omitempty"`
+	ExitCode            int      `json:"exit_code"`
+	ProposalID          string   `json:"proposal_id,omitempty"`
+	ProposalPath        string   `json:"proposal_path,omitempty"`
+	Candidates          int      `json:"candidates"`
+	CandidateSource     string   `json:"candidate_source,omitempty"`
+	Safety              string   `json:"safety,omitempty"`
+	ArchivistDecision   string   `json:"archivist_decision,omitempty"`
+	ApplyReady          bool     `json:"apply_ready"`
+	AppliedProposal     string   `json:"applied_proposal,omitempty"`
+	AppliedPaths        []string `json:"applied_paths,omitempty"`
+	CleanupUpdated      []string `json:"cleanup_updated,omitempty"`
+	StoppedReason       string   `json:"stopped_reason,omitempty"`
+}
+
+func writeLearnSummary(w io.Writer, summary learnSummary, jsonOutput bool) {
+	if jsonOutput {
+		data, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			fmt.Fprintf(w, "{\"status\":\"failed\",\"outcome\":\"json_encode_failed\",\"stopped_reason\":%q}\n", err.Error())
+			return
+		}
+		fmt.Fprintf(w, "%s\n", data)
+		return
+	}
+	fmt.Fprintln(w, "Learn summary:")
+	fmt.Fprintf(w, "  status: %s\n", summary.Status)
+	fmt.Fprintf(w, "  outcome: %s\n", summary.Outcome)
+	fmt.Fprintf(w, "  run: %s\n", summary.RunID)
+	if summary.ProposalPath != "" {
+		fmt.Fprintf(w, "  proposal: %s\n", summary.ProposalPath)
+	}
+	fmt.Fprintf(w, "  candidates: %d\n", summary.Candidates)
+	if summary.ArchivistDecision != "" {
+		fmt.Fprintf(w, "  archivist_decision: %s\n", summary.ArchivistDecision)
+	}
+	fmt.Fprintf(w, "  apply_ready: %t\n", summary.ApplyReady)
+	fmt.Fprintf(w, "  applied: %d\n", len(summary.AppliedPaths))
+	if len(summary.CleanupUpdated) > 0 {
+		fmt.Fprintf(w, "  cleanup_updated: %d\n", len(summary.CleanupUpdated))
+	}
+	if summary.StoppedReason != "" {
+		fmt.Fprintf(w, "  stopped_reason: %s\n", summary.StoppedReason)
+	}
 }
 
 func boolPtr(value bool) *bool {
@@ -561,20 +673,20 @@ func findCandidateItem(items []candidates.Item, id string) (candidates.Item, boo
 	return candidates.Item{}, false
 }
 
-func cleanupDeferredIfRequested(projectRoot string, enabled bool, stdout, stderr io.Writer) int {
+func cleanupDeferredIfRequested(projectRoot string, enabled bool, stdout, stderr io.Writer) ([]string, int) {
 	if !enabled {
-		return 0
+		return nil, 0
 	}
 	result, err := candidates.CleanupDeferred(projectRoot, candidates.CleanupOptions{})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn deferred cleanup failed: %v\n", err)
-		return 1
+		return nil, 1
 	}
 	fmt.Fprintf(stdout, "Deferred cleanup: %d\n", len(result.Updated))
 	for _, path := range result.Updated {
 		fmt.Fprintf(stdout, "  - %s\n", path)
 	}
-	return 0
+	return result.Updated, 0
 }
 
 func runPropose(args []string, stdout, stderr io.Writer) int {
