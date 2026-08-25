@@ -31,6 +31,40 @@ func TestAddBackendRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsLearnForOldConfig(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".sima"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(root), []byte("version: 1\nbackends: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !loaded.Learn.AutoApply || !loaded.Learn.AutoCleanupDeferred {
+		t.Fatalf("expected auto-learning defaults, got %#v", loaded.Learn)
+	}
+}
+
+func TestLoadHonorsExplicitLearnFalse(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".sima"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(root), []byte("version: 1\nlearn:\n  auto_apply: false\n  auto_cleanup_deferred: false\nbackends: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.Learn.AutoApply || loaded.Learn.AutoCleanupDeferred {
+		t.Fatalf("expected explicit false learn config, got %#v", loaded.Learn)
+	}
+}
+
 func TestAddBackendRejectsDuplicateWithoutForce(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".sima"), 0o755); err != nil {

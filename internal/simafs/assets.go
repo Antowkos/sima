@@ -9,6 +9,9 @@ policy:
   team_auto_apply: false
   require_clean_archivist_session: true
   reject_reward_hacking: true
+learn:
+  auto_apply: true
+  auto_cleanup_deferred: true
 backends: {}
 `
 

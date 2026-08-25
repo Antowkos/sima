@@ -80,7 +80,7 @@ Usage:
   sima lint [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
-  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--auto-cleanup-deferred] [--path <path>]
+  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -325,8 +325,8 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	backendName := ""
 	archivistBackendName := ""
 	task := ""
-	autoApply := true
-	autoCleanupDeferred := false
+	var autoApplyOverride *bool
+	var autoCleanupDeferredOverride *bool
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -359,16 +359,20 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 			i++
 			root = args[i]
 		case "--no-auto-apply":
-			autoApply = false
+			autoApplyOverride = boolPtr(false)
+		case "--auto-apply":
+			autoApplyOverride = boolPtr(true)
 		case "--auto-cleanup-deferred":
-			autoCleanupDeferred = true
+			autoCleanupDeferredOverride = boolPtr(true)
+		case "--no-auto-cleanup-deferred":
+			autoCleanupDeferredOverride = boolPtr(false)
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
 			return 2
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--auto-cleanup-deferred] [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--path <path>]")
 		return 2
 	}
 	if archivistBackendName == "" {
@@ -378,6 +382,19 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "resolve path: %v\n", err)
 		return 1
+	}
+	cfg, err := config.Load(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "learn config failed: %v\n", err)
+		return 1
+	}
+	autoApply := cfg.Learn.AutoApply
+	autoCleanupDeferred := cfg.Learn.AutoCleanupDeferred
+	if autoApplyOverride != nil {
+		autoApply = *autoApplyOverride
+	}
+	if autoCleanupDeferredOverride != nil {
+		autoCleanupDeferred = *autoCleanupDeferredOverride
 	}
 
 	runResult, err := runner.Run(abs, runner.Options{BackendName: backendName, Task: task})
@@ -449,7 +466,7 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "Learn auto-apply: proposal passed apply-ready gates")
 	if !autoApply {
-		fmt.Fprintf(stdout, "Learn stopped: --no-auto-apply set; proposal remains pending at %s\n", readyItem.Path)
+		fmt.Fprintf(stdout, "Learn stopped: auto_apply disabled; proposal remains pending at %s\n", readyItem.Path)
 		return 0
 	}
 	applyResult, err := apply.Apply(abs, apply.Options{Target: readyItem.Path})
@@ -463,6 +480,10 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "Learn complete: applied safe approved knowledge")
 	return 0
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func findCandidateItem(items []candidates.Item, id string) (candidates.Item, bool) {

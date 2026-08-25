@@ -45,7 +45,7 @@ sima doctor .
 sima backend add <name> --kind <claude-code|codex> --executable <path>
 sima backend doctor <name> .
 sima brief "small real task" --path .
-sima learn --backend <name> --task "small real task" --auto-cleanup-deferred --path .
+sima learn --backend <name> --task "small real task" --path .
 sima candidates list --status all --path .
 sima memory list --status active --path .
 sima skill list --status active --path .
@@ -79,7 +79,7 @@ For each pilot run, collect:
 
 Before inviting more than 1–2 technical teammates, complete:
 
-- [ ] config-driven learn defaults in `.sima/config.yaml`;
+- [x] config-driven learn defaults in `.sima/config.yaml`;
 - [ ] `sima doctor` covers config, directories, lint, and candidate queue health;
 - [ ] `sima backend doctor` verifies executable, prompt round-trip, JSON output, and schema mode when configured;
 - [ ] `sima learn` prints a concise final summary;

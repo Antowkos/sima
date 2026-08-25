@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,7 +14,10 @@ type Config struct {
 	Version  int                       `yaml:"version"`
 	Project  Project                   `yaml:"project"`
 	Policy   Policy                    `yaml:"policy"`
+	Learn    Learn                     `yaml:"learn"`
 	Backends map[string]BackendProfile `yaml:"backends"`
+
+	LearnConfigured bool `yaml:"-"`
 }
 
 type Project struct {
@@ -26,6 +30,15 @@ type Policy struct {
 	TeamAutoApply                bool `yaml:"team_auto_apply"`
 	RequireCleanArchivistSession bool `yaml:"require_clean_archivist_session"`
 	RejectRewardHacking          bool `yaml:"reject_reward_hacking"`
+}
+
+type Learn struct {
+	AutoApply           bool `yaml:"auto_apply"`
+	AutoCleanupDeferred bool `yaml:"auto_cleanup_deferred"`
+}
+
+func DefaultLearn() Learn {
+	return Learn{AutoApply: true, AutoCleanupDeferred: true}
 }
 
 type BackendProfile struct {
@@ -56,6 +69,10 @@ func Load(projectRoot string) (Config, error) {
 	if cfg.Backends == nil {
 		cfg.Backends = map[string]BackendProfile{}
 	}
+	cfg.LearnConfigured = hasTopLevelLearnBlock(string(data))
+	if !cfg.LearnConfigured {
+		cfg.Learn = DefaultLearn()
+	}
 	return cfg, nil
 }
 
@@ -64,11 +81,27 @@ func Save(projectRoot string, cfg Config) error {
 	if cfg.Backends == nil {
 		cfg.Backends = map[string]BackendProfile{}
 	}
+	if !cfg.LearnConfigured {
+		cfg.Learn = DefaultLearn()
+	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
+}
+
+func hasTopLevelLearnBlock(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "learn:") {
+			return true
+		}
+	}
+	return false
 }
 
 func AddBackend(projectRoot, name string, profile BackendProfile, force bool) error {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/simafs"
 )
 
@@ -288,7 +289,7 @@ func TestLearnCommandStopsWhenWorkerProposesNoLearning(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture and apply safe lesson", "--path", root}, &out, &stderr)
+	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture and apply safe lesson", "--no-auto-cleanup-deferred", "--path", root}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
@@ -337,7 +338,7 @@ func TestLearnCommandAutoCleanupDeferred(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture no durable lesson", "--auto-cleanup-deferred", "--path", root}, &out, &stderr)
+	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture no durable lesson", "--path", root}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("learn auto cleanup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
@@ -421,10 +422,19 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	}
 }
 
-func TestLearnCommandNoAutoApplyLeavesReadyProposalPending(t *testing.T) {
+func TestLearnCommandConfigNoAutoApplyLeavesReadyProposalPending(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
 		t.Fatalf("Init() error = %v", initErr)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Learn.AutoApply = false
+	cfg.Learn.AutoCleanupDeferred = true
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
 	}
 	worker := filepath.Join(root, "structured-worker.sh")
 	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'JSON'\n{\"proposed_memory\":[{\"type\":\"workflow\",\"title\":\"Structured inspect-only learn candidate\",\"trigger\":\"When sima learn runs with no-auto-apply.\",\"summary\":\"sima learn should leave apply-ready proposals pending when --no-auto-apply is set.\"}]}\nJSON\n"), 0o755); err != nil {
@@ -448,11 +458,11 @@ func TestLearnCommandNoAutoApplyLeavesReadyProposalPending(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	code = Run([]string{"sima", "learn", "--backend", "structured", "--archivist-backend", "reviewer", "--task", "capture inspect-only structured lesson", "--no-auto-apply", "--path", root}, &out, &stderr)
+	code = Run([]string{"sima", "learn", "--backend", "structured", "--archivist-backend", "reviewer", "--task", "capture inspect-only structured lesson", "--path", root}, &out, &stderr)
 	if code != 0 {
-		t.Fatalf("learn --no-auto-apply code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+		t.Fatalf("learn config auto_apply false code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	for _, want := range []string{"Archivist decision: apply", "Learn auto-apply: proposal passed apply-ready gates", "Learn stopped: --no-auto-apply set; proposal remains pending"} {
+	for _, want := range []string{"Archivist decision: apply", "Learn auto-apply: proposal passed apply-ready gates", "Learn stopped: auto_apply disabled; proposal remains pending"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("learn --no-auto-apply output missing %q: %q", want, out.String())
 		}
