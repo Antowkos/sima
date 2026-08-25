@@ -85,6 +85,8 @@ Usage:
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
   sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
+  sima candidates list [--status <candidate|deferred|applied|rejected|all>] [--path <path>]
+  sima candidates show <id|path> [--path <path>]
   sima candidates cleanup [--path <path>]
   sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
   sima skill list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
@@ -102,6 +104,7 @@ Current v0 slice:
   learn    Run the full gated self-improvement loop: run, propose, archivist, apply
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
+  candidates List, inspect, and clean candidate proposals
   apply    Promote an approved safe personal proposal into active memory/skills
   archivist Decide apply/reject/defer for a candidate proposal with deterministic gates
   backend  Manage named Claude Code/Codex backend profiles`)
@@ -801,12 +804,110 @@ func runBackendAdd(args []string, stdout, stderr io.Writer) int {
 }
 
 func runCandidates(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "cleanup" {
-		fmt.Fprintln(stderr, "usage: sima candidates cleanup [--path <path>]")
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: sima candidates <list|show|cleanup> [options]")
 		return 2
 	}
+	switch args[0] {
+	case "list":
+		return runCandidatesList(args[1:], stdout, stderr)
+	case "show":
+		return runCandidatesShow(args[1:], stdout, stderr)
+	case "cleanup":
+		return runCandidatesCleanup(args[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "unknown candidates command: %s\n", args[0])
+		return 2
+	}
+}
+
+func runCandidatesList(args []string, stdout, stderr io.Writer) int {
 	root := "."
-	for i := 1; i < len(args); i++ {
+	status := "candidate"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--status":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--status requires a value")
+				return 2
+			}
+			i++
+			status = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	items, err := candidates.List(abs, candidates.ListOptions{Status: status})
+	if err != nil {
+		fmt.Fprintf(stderr, "candidate list failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "STATUS	DECISION	SAFETY	DESTINATION	OPERATION	CANDIDATES	ID	PATH")
+	for _, item := range items {
+		fmt.Fprintf(stdout, "%s	%s	%s	%s	%s	%d	%s	%s\n", item.Status, item.Decision, item.Safety, item.Destination, item.Operation, item.Candidates, item.ID, item.Path)
+	}
+	return 0
+}
+
+func runCandidatesShow(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	target := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			if target != "" {
+				fmt.Fprintln(stderr, "usage: sima candidates show <id|path> [--path <path>]")
+				return 2
+			}
+			target = args[i]
+		}
+	}
+	if target == "" {
+		fmt.Fprintln(stderr, "usage: sima candidates show <id|path> [--path <path>]")
+		return 2
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := candidates.Show(abs, target)
+	if err != nil {
+		fmt.Fprintf(stderr, "candidate show failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Candidate: %s\n", result.Path)
+	fmt.Fprintf(stdout, "ID: %s\nStatus: %s\nDecision: %s\nSafety: %s\nDestination: %s\nOperation: %s\nCandidates: %d\n\n", result.Proposal.ID, result.Proposal.Status, result.Proposal.ArchivistDecision, result.Proposal.Safety.Decision, result.Proposal.Learning.Destination, result.Proposal.Learning.Operation, len(result.Proposal.CandidateMemories)+len(result.Proposal.CandidateSkills))
+	fmt.Fprint(stdout, result.Content)
+	if !strings.HasSuffix(result.Content, "\n") {
+		fmt.Fprintln(stdout)
+	}
+	return 0
+}
+
+func runCandidatesCleanup(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--path":
 			if i+1 >= len(args) {

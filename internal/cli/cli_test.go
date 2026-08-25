@@ -403,6 +403,39 @@ func TestLintCommand(t *testing.T) {
 	}
 }
 
+func TestCandidatesListAndShowCommands(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	candidateDir := filepath.Join(root, ".sima", "personal", "memory", "candidates")
+	candidate := "version: 1\nid: inspect-me\nkind: run_reflection\nscope: personal\noperation: create\nstatus: candidate\narchivist_decision: apply\nsafety:\n  decision: safe\nlearning:\n  destination: memory\n  operation: create\ncandidate_memories:\n  - type: invariant\n    title: Inspect candidates\n    trigger: When candidate queues need review.\n    summary: Candidate list and show expose proposal metadata before mutation.\nrun:\n  id: run\n  path: .sima/personal/runs/run\n"
+	if err := os.WriteFile(filepath.Join(candidateDir, "inspect-me.yaml"), []byte(candidate), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "candidates", "list", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("candidates list code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"STATUS\tDECISION\tSAFETY\tDESTINATION\tOPERATION\tCANDIDATES\tID\tPATH", "candidate\tapply\tsafe\tmemory\tcreate\t1\tinspect-me\t.sima/personal/memory/candidates/inspect-me.yaml"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("candidate list missing %q:\n%s", want, out.String())
+		}
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "candidates", "show", "inspect-me", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("candidates show code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Candidate: .sima/personal/memory/candidates/inspect-me.yaml", "ID: inspect-me", "Status: candidate", "title: Inspect candidates"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("candidate show missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestCandidatesCleanupCommand(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
