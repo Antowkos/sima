@@ -279,11 +279,11 @@ func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 				return resultReport, parseResult{Structured: true}
 			}
 			if report.StructuredOutput != nil {
-				merged := *report.StructuredOutput
-				if resultStructured {
-					merged = mergeWorkerReport(merged, resultReport)
-				}
-				return merged, parseResult{Structured: true}
+				// Claude JSON Schema mode returns both a human/result string and a
+				// validated structured_output object. The result string often mirrors
+				// structured_output, so prefer the validated object instead of merging
+				// candidates from both places and creating duplicate memories/skills.
+				return *report.StructuredOutput, parseResult{Structured: true}
 			}
 			if resultStructured {
 				report = mergeWorkerReport(report, resultReport)

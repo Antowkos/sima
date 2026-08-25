@@ -296,6 +296,42 @@ func TestGeneratePrefersClaudeResultLifecycleOverStructuredOutputCandidates(t *t
 	}
 }
 
+func TestGeneratePrefersClaudeStructuredOutputOverMirroredResultCandidates(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260825-201000-wrapper-duplicate"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: wrapper duplicate\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	candidateJSON := `{"proposed_memory":[{"type":"workflow","title":"Wrapper candidates are not duplicated","trigger":"When Claude JSON Schema output includes result and structured_output.","summary":"SIMA should use the validated structured_output object and not duplicate mirrored candidates from the result string."}]}`
+	stdout := `{"type":"result","subtype":"success","result":` + fmt.Sprintf("%q", candidateJSON) + `,"structured_output":{"proposed_memory":[{"type":"workflow","title":"Wrapper candidates are not duplicated","trigger":"When Claude JSON Schema output includes result and structured_output.","summary":"SIMA should use the validated structured_output object and not duplicate mirrored candidates from the result string."}]}}`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured" || result.Candidates != 1 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Count(text, "title: Wrapper candidates are not duplicated") != 1 {
+		t.Fatalf("candidate was duplicated:\n%s", text)
+	}
+}
+
 func TestGenerateClassifiesSimilarActiveMemoryAsUpdate(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {

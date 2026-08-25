@@ -86,7 +86,9 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] `sima learn --json` emits a machine-readable summary for wrappers;
 - [x] `sima install` writes managed Claude Code/Codex project instructions;
 - [x] short [5-minute setup guide](5-minute-setup.md) exists;
-- [ ] real Claude Code auto-learning dogfood completed on a small task;
+- [x] real Claude Code auto-learning dogfood completed on a small task;
+  - result: `claude-schema` completed worker → structured proposal → clean archivist → apply-ready → auto-apply;
+  - follow-up: dogfood exposed duplicate mirrored `result`/`structured_output` candidates from Claude JSON Schema output; parser now prefers validated `structured_output` unless `result` contains an explicit lifecycle operation.
 - [ ] real Codex auto-learning dogfood completed on a small task.
 
 ## Team memory policy for alpha
