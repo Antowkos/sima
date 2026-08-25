@@ -245,7 +245,7 @@ When the archivist defers no-candidate/session-only learning it marks the propos
 
 `apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
 
-`brief` is lifecycle-aware: it reads active memory/skills only. Items with `status: deprecated`, `status: superseded`, or `status: archived` remain on disk as history but are excluded from retrieved task context. `sima memory list --status all` and `sima skill list --status all` provide the audit view over personal/team stores; missing status is treated as `active` for legacy files, matching brief retrieval.
+`brief` is lifecycle-aware: it reads active memory/skills only. Items with `status: deprecated`, `status: superseded`, or `status: archived` remain on disk as history but are excluded from retrieved task context. `sima memory list --status all` and `sima skill list --status all` provide the audit view over personal/team stores; missing status is treated as `active` for legacy files, matching brief retrieval. `sima lint` checks lifecycle metadata and proposal hygiene: invalid statuses, malformed YAML/frontmatter, missing memory titles or skill names/headings, pending candidates, and lifecycle targets that resolve outside the project root.
 
 ## Archivist contract
 

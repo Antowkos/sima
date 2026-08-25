@@ -384,6 +384,25 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	}
 }
 
+func TestLintCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	memoryDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
+	if err := os.WriteFile(filepath.Join(memoryDir, "bad.yaml"), []byte("id: bad\nstatus: stale\ntitle: Bad status\nsummary: x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "lint", root}, &out, &stderr)
+	if code != 1 {
+		t.Fatalf("lint code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "SIMA lint for") || !strings.Contains(out.String(), "status must be active") || !strings.Contains(out.String(), "Summary: 1 errors") {
+		t.Fatalf("unexpected lint output: %q", out.String())
+	}
+}
+
 func TestMemoryAndSkillListCommandsShowLifecycleStatus(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

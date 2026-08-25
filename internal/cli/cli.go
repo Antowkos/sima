@@ -13,6 +13,7 @@ import (
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/catalog"
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/lint"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
 	"github.com/antowkos/sima/internal/runner"
@@ -38,6 +39,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runInit(args[2:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[2:], stdout, stderr)
+	case "lint":
+		return runLint(args[2:], stdout, stderr)
 	case "backend":
 		return runBackend(args[2:], stdout, stderr)
 	case "brief":
@@ -71,6 +74,7 @@ func printHelp(w io.Writer) {
 Usage:
   sima init [path]
   sima doctor [path]
+  sima lint [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
   sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]
@@ -88,6 +92,7 @@ Usage:
 Current v0 slice:
   init     Create project-local .sima scaffold
   doctor   Check SIMA project state and local runtime prerequisites
+  lint     Check SIMA knowledge lifecycle metadata, candidates, and target paths
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
   learn    Run the full gated self-improvement loop: run, propose, archivist, apply
@@ -161,6 +166,36 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	}
 	if !report.OK() {
 		fmt.Fprintln(stderr, "SIMA doctor found problems")
+		return 1
+	}
+	return 0
+}
+
+func runLint(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	if len(args) > 1 {
+		fmt.Fprintln(stderr, "usage: sima lint [path]")
+		return 2
+	}
+	if len(args) == 1 {
+		root = args[0]
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := lint.Check(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "lint failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "SIMA lint for %s\n", abs)
+	for _, issue := range result.Issues {
+		fmt.Fprintf(stdout, "[%s] %s: %s\n", issue.Severity, issue.Path, issue.Message)
+	}
+	fmt.Fprintf(stdout, "Summary: %d errors, %d warnings\n", result.ErrorCount(), result.WarningCount())
+	if result.ErrorCount() > 0 {
 		return 1
 	}
 	return 0
