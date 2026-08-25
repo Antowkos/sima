@@ -18,6 +18,7 @@ See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands and [Team Al
 
 ```bash
 sima init [path]
+sima install [--client claude|codex|all] [--path path]
 sima doctor [path]
 sima lint [path]
 sima brief "task description" [--path path]

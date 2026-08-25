@@ -31,9 +31,10 @@ If you do not copy it into `PATH`, run SIMA via the built binary path, for examp
 ```bash
 cd $PROJECT
 sima init .
+sima install --path .
 ```
 
-This creates project-local state under `.sima/` only. The SIMA source code is not vendored into the project.
+This creates project-local state under `.sima/` only. The SIMA source code is not vendored into the project. `sima install` upserts managed SIMA blocks into `CLAUDE.md` and `AGENTS.md` so Claude Code and Codex see the same project-memory rules.
 
 ## 3. Add one backend
 

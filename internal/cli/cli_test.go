@@ -34,6 +34,30 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestInstallCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "install", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("install code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "CLAUDE.md") || !strings.Contains(out.String(), "AGENTS.md") {
+		t.Fatalf("unexpected install output: %q", out.String())
+	}
+	for _, rel := range []string{"CLAUDE.md", "AGENTS.md"} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		if !strings.Contains(string(data), "BEGIN SIMA MANAGED INSTRUCTIONS") || !strings.Contains(string(data), "sima learn --backend <backend-name>") {
+			t.Fatalf("missing managed instructions in %s:\n%s", rel, data)
+		}
+	}
+}
+
 func TestBriefCommand(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

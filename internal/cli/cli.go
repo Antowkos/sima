@@ -39,6 +39,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "init":
 		return runInit(args[2:], stdout, stderr)
+	case "install":
+		return runInstall(args[2:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[2:], stdout, stderr)
 	case "lint":
@@ -77,6 +79,7 @@ func printHelp(w io.Writer) {
 
 Usage:
   sima init [path]
+  sima install [--client <claude|codex|all>] [--path <path>]
   sima doctor [path]
   sima lint [path]
   sima brief <task> [--path <path>]
@@ -99,6 +102,7 @@ Usage:
 
 Current v0 slice:
   init     Create project-local .sima scaffold
+  install  Upsert managed Claude Code/Codex project instruction blocks
   doctor   Check SIMA project state and local runtime prerequisites
   lint     Check SIMA knowledge lifecycle metadata, candidates, and target paths
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
@@ -140,6 +144,57 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 		for _, p := range created {
 			fmt.Fprintf(stdout, "  - %s\n", p)
 		}
+	}
+	return 0
+}
+
+func runInstall(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	client := "all"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			root = args[i+1]
+			i++
+		case "--client":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--client requires a value")
+				return 2
+			}
+			client = args[i+1]
+			i++
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	clients := []string{}
+	switch strings.ToLower(client) {
+	case "all":
+		clients = nil
+	case "claude", "codex":
+		clients = []string{client}
+	default:
+		fmt.Fprintf(stderr, "unknown client: %s\n", client)
+		return 2
+	}
+	result, err := simafs.InstallInstructions(abs, simafs.InstallOptions{Clients: clients})
+	if err != nil {
+		fmt.Fprintf(stderr, "install failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Installed SIMA managed instructions in %s\n", abs)
+	for _, path := range result.Written {
+		fmt.Fprintf(stdout, "  - %s\n", path)
 	}
 	return 0
 }
