@@ -72,7 +72,7 @@ Usage:
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
-  sima archivist --proposal <proposal-id|path> [--path <path>]
+  sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -517,6 +517,7 @@ func runApply(args []string, stdout, stderr io.Writer) int {
 func runArchivist(args []string, stdout, stderr io.Writer) int {
 	root := "."
 	target := ""
+	backendName := ""
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -527,6 +528,13 @@ func runArchivist(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			target = args[i]
+		case "--backend":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--backend requires a value")
+				return 2
+			}
+			i++
+			backendName = args[i]
 		case "--path":
 			if i+1 >= len(args) {
 				fmt.Fprintln(stderr, "--path requires a value")
@@ -540,7 +548,7 @@ func runArchivist(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if target == "" {
-		fmt.Fprintln(stderr, "usage: sima archivist --proposal <proposal-id|path> [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]")
 		return 2
 	}
 	abs, err := filepath.Abs(root)
@@ -548,7 +556,7 @@ func runArchivist(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "resolve path: %v\n", err)
 		return 1
 	}
-	result, err := archivist.Decide(abs, archivist.Options{Target: target})
+	result, err := archivist.Decide(abs, archivist.Options{Target: target, BackendName: backendName})
 	if err != nil {
 		fmt.Fprintf(stderr, "archivist failed: %v\n", err)
 		return 1

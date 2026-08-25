@@ -260,6 +260,10 @@ The archivist must run in a clean separate process/session from the worker. It r
 
 It emits structured decisions: `apply`, `reject`, or `defer`.
 
+SIMA's target architecture is Hermes-like: deterministic code owns flow, file paths, schemas, hard validation, lifecycle mutation, and retrieval filters; model backends own semantic judgment. The archivist may therefore run as a model-backed clean session via `sima archivist --proposal <id> --backend <backend>`. In that mode it must emit structured JSON with `decision`, `learning.destination`, `learning.operation`, optional explicit `learning.target`, quality flags, and notes. CLI validation remains the hard gate: unsafe proposals, invalid target paths, malformed decisions, weak quality flags, and failed deterministic review can still downgrade or reject a model `apply`.
+
+The deterministic archivist remains available when no backend is supplied, mainly as a bootstrap/safety fallback while the model-backed reviewer matures.
+
 ## Safety
 
 Auto-apply only personal/local proposals with:

@@ -70,25 +70,25 @@ type Safety struct {
 }
 
 type Learning struct {
-	Destination string          `yaml:"destination,omitempty"`
-	Operation   string          `yaml:"operation,omitempty"`
-	Target      LearningTarget  `yaml:"target,omitempty"`
-	Quality     LearningQuality `yaml:"quality,omitempty"`
-	Notes       []string        `yaml:"notes,omitempty"`
+	Destination string          `yaml:"destination,omitempty" json:"destination,omitempty"`
+	Operation   string          `yaml:"operation,omitempty" json:"operation,omitempty"`
+	Target      LearningTarget  `yaml:"target,omitempty" json:"target,omitempty"`
+	Quality     LearningQuality `yaml:"quality,omitempty" json:"quality,omitempty"`
+	Notes       []string        `yaml:"notes,omitempty" json:"notes,omitempty"`
 }
 
 type LearningTarget struct {
-	Kind string `yaml:"kind,omitempty"`
-	Path string `yaml:"path,omitempty"`
-	ID   string `yaml:"id,omitempty"`
+	Kind string `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+	ID   string `yaml:"id,omitempty" json:"id,omitempty"`
 }
 
 type LearningQuality struct {
-	Durable        bool `yaml:"durable"`
-	Triggerable    bool `yaml:"triggerable"`
-	EvidenceBacked bool `yaml:"evidence_backed"`
-	NonTransient   bool `yaml:"non_transient"`
-	Reusable       bool `yaml:"reusable"`
+	Durable        bool `yaml:"durable" json:"durable"`
+	Triggerable    bool `yaml:"triggerable" json:"triggerable"`
+	EvidenceBacked bool `yaml:"evidence_backed" json:"evidence_backed"`
+	NonTransient   bool `yaml:"non_transient" json:"non_transient"`
+	Reusable       bool `yaml:"reusable" json:"reusable"`
 }
 
 type RunRef struct {

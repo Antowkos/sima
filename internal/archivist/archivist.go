@@ -1,21 +1,32 @@
 package archivist
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
 )
 
 type Options struct {
-	Target string
-	Now    time.Time
+	Target      string
+	BackendName string
+	Now         time.Time
+}
+
+type modelDecision struct {
+	Decision string            `json:"decision"`
+	Learning proposal.Learning `json:"learning"`
+	Notes    []string          `json:"notes"`
+	Wrapper  *modelDecision    `json:"structured_output"`
 }
 
 type Result struct {
@@ -44,6 +55,14 @@ func Decide(projectRoot string, opts Options) (Result, error) {
 	}
 
 	decision, notes := decide(projectRoot, proposalPath, p)
+	if strings.TrimSpace(opts.BackendName) != "" {
+		var updated proposal.Proposal
+		updated, decision, notes, err = decideWithModel(projectRoot, proposalPath, p, opts.BackendName)
+		if err != nil {
+			return Result{}, err
+		}
+		p = updated
+	}
 	p.ArchivistDecision = decision
 	if decision == "reject" {
 		p.Status = "rejected"
@@ -98,6 +117,207 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 	}
 	return "apply", []string{"deterministic archivist approved: valid personal safe proposal with evidence and learning gates passed"}
 }
+
+func decideWithModel(projectRoot, proposalPath string, p proposal.Proposal, backendName string) (proposal.Proposal, string, []string, error) {
+	decision, err := runModelArchivist(projectRoot, proposalPath, backendName)
+	if err != nil {
+		return p, "", nil, err
+	}
+	if decision.Wrapper != nil {
+		decision = *decision.Wrapper
+	}
+	if !oneOf(decision.Decision, []string{"apply", "defer", "reject"}) {
+		return p, "", nil, fmt.Errorf("model archivist decision must be apply, defer, or reject")
+	}
+	if decision.Learning.Destination != "" {
+		p.Learning = decision.Learning
+	}
+	if problems := validateModelLearning(p.Learning); len(problems) > 0 {
+		return p, "reject", append([]string{"model archivist returned invalid learning"}, problems...), nil
+	}
+	notes := append([]string{"model archivist reviewed proposal in a separate backend process"}, decision.Notes...)
+	if decision.Decision != "apply" {
+		return p, decision.Decision, notes, nil
+	}
+	gateDecision, gateNotes := decide(projectRoot, proposalPath, p)
+	if gateDecision != "apply" {
+		return p, gateDecision, append(notes, append([]string{"deterministic gate downgraded model apply"}, gateNotes...)...), nil
+	}
+	return p, "apply", append(notes, gateNotes...), nil
+}
+
+func validateModelLearning(learning proposal.Learning) []string {
+	var problems []string
+	if !oneOf(learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
+		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")
+	}
+	if !oneOf(learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
+		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
+	}
+	if oneOf(learning.Operation, []string{"update", "deprecate", "supersede"}) {
+		if strings.TrimSpace(learning.Target.Path) == "" {
+			problems = append(problems, "learning.target.path is required for update, deprecate, or supersede")
+		}
+		if !oneOf(learning.Target.Kind, []string{"memory", "skill"}) {
+			problems = append(problems, "learning.target.kind must be memory or skill")
+		}
+	}
+	return problems
+}
+
+func runModelArchivist(projectRoot, proposalPath, backendName string) (modelDecision, error) {
+	cfg, err := config.Load(projectRoot)
+	if err != nil {
+		return modelDecision{}, err
+	}
+	profile, ok := cfg.Backends[backendName]
+	if !ok {
+		return modelDecision{}, fmt.Errorf("backend %q not found", backendName)
+	}
+	prompt, err := buildArchivistPrompt(projectRoot, proposalPath)
+	if err != nil {
+		return modelDecision{}, err
+	}
+	argv := buildArchivistArgs(profile, prompt)
+	cmd := exec.Command(expandHome(profile.Executable), argv...)
+	cmd.Dir = projectRoot
+	if profile.WorkingDir != "" {
+		cmd.Dir = expandHome(profile.WorkingDir)
+	}
+	cmd.Env = mergeEnv(os.Environ(), profile.Env)
+	stdout, err := cmd.Output()
+	if err != nil {
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = string(ee.Stderr)
+		}
+		return modelDecision{}, fmt.Errorf("model archivist backend failed: %v %s", err, strings.TrimSpace(stderr))
+	}
+	var decision modelDecision
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(stdout))), &decision); err != nil {
+		return modelDecision{}, fmt.Errorf("model archivist stdout must be JSON: %w", err)
+	}
+	return decision, nil
+}
+
+func buildArchivistPrompt(projectRoot, proposalPath string) (string, error) {
+	proposalData, err := os.ReadFile(proposalPath)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(`You are the SIMA clean-session archivist. You did not perform the worker task.
+
+Judge only this bounded proposal and evidence pointers. Return JSON only, no Markdown fences or prose.
+
+Required JSON shape:
+{
+  "decision": "apply|defer|reject",
+  "learning": {
+    "destination": "memory|skill|mixed|session_only|reject",
+    "operation": "create|update|supersede|deprecate",
+    "target": {"kind": "memory|skill", "path": "optional existing target path", "id": "optional target id"},
+    "quality": {"durable": true, "triggerable": true, "evidence_backed": true, "non_transient": true, "reusable": true},
+    "notes": ["short reasons"]
+  },
+  "notes": ["short decision reasons"]
+}
+
+Apply only durable, triggerable, evidence-backed, non-transient personal learning. Defer ambiguous duplicates, weak evidence, or session-only observations. Reject malformed, unsafe, or invalid learning.
+
+Project root: %s
+Proposal path: %s
+
+Proposal YAML:
+---BEGIN PROPOSAL YAML---
+%s
+---END PROPOSAL YAML---
+`, projectRoot, rel(projectRoot, proposalPath), string(proposalData)), nil
+}
+
+func buildArchivistArgs(profile config.BackendProfile, prompt string) []string {
+	switch profile.Kind {
+	case "claude-code":
+		args := []string{"-p"}
+		if profile.Metadata["output_format"] == "json_schema" {
+			args = append(args, "--output-format", "json", "--json-schema", archivistJSONSchema)
+		}
+		return append(args, prompt)
+	case "codex":
+		return []string{"exec", prompt}
+	default:
+		return []string{prompt}
+	}
+}
+
+func oneOf(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeEnv(base []string, extra map[string]string) []string {
+	if len(extra) == 0 {
+		return base
+	}
+	merged := append([]string{}, base...)
+	for k, v := range extra {
+		merged = append(merged, k+"="+v)
+	}
+	return merged
+}
+
+func expandHome(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
+}
+
+const archivistJSONSchema = `{
+  "type": "object",
+  "properties": {
+    "decision": {"type": "string", "enum": ["apply", "defer", "reject"]},
+    "learning": {
+      "type": "object",
+      "properties": {
+        "destination": {"type": "string", "enum": ["memory", "skill", "mixed", "session_only", "reject"]},
+        "operation": {"type": "string", "enum": ["create", "update", "supersede", "deprecate"]},
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {"type": "string"},
+            "path": {"type": "string"},
+            "id": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "durable": {"type": "boolean"},
+            "triggerable": {"type": "boolean"},
+            "evidence_backed": {"type": "boolean"},
+            "non_transient": {"type": "boolean"},
+            "reusable": {"type": "boolean"}
+          },
+          "required": ["durable", "triggerable", "evidence_backed", "non_transient", "reusable"],
+          "additionalProperties": false
+        },
+        "notes": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["destination", "operation", "quality"],
+      "additionalProperties": false
+    },
+    "notes": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["decision", "learning", "notes"],
+  "additionalProperties": false
+}`
 
 func decideLearning(p proposal.Proposal) (string, []string, bool) {
 	if p.Learning.Destination == "" {

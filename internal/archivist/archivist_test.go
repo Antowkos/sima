@@ -171,6 +171,35 @@ When a worker emits structured proposed_skills.
 	}
 }
 
+func TestDecideUsesModelArchivistBackend(t *testing.T) {
+	root, proposalPath := createProposal(t, "model archivist proposal", false)
+	script := filepath.Join(root, "model-archivist.sh")
+	output := `{"decision":"apply","learning":{"destination":"memory","operation":"create","quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["model quality passed"]},"notes":["model approved bounded evidence"]}`
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' '"+output+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.AddBackend(root, "archivist-model", config.BackendProfile{Kind: "claude-code", Executable: script}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+
+	result, err := Decide(root, Options{Target: proposalPath, BackendName: "archivist-model", Now: time.Date(2026, 8, 23, 14, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	joined := strings.Join(result.Notes, "\n")
+	if result.Decision != "apply" || !strings.Contains(joined, "model archivist reviewed") || !strings.Contains(joined, "model approved bounded evidence") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "archivist_decision: apply") || !strings.Contains(text, "model quality passed") {
+		t.Fatalf("proposal not updated with model decision:\n%s", text)
+	}
+}
+
 func createProposal(t *testing.T, task string, suspicious bool) (string, string) {
 	t.Helper()
 	root := t.TempDir()
