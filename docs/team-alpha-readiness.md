@@ -8,7 +8,7 @@ Team alpha means:
 
 - technical teammates can install or build `sima` locally;
 - each pilot repo can run `sima init`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
-- at least one real Claude Code or Codex backend can pass `sima backend doctor`;
+- at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
 - all memory/skill changes remain auditable via lifecycle status and candidate history;
 - team feedback is captured as issues or docs changes, not informal chat-only notes.
@@ -43,7 +43,6 @@ Recommended first-session workflow for a teammate:
 sima init .
 sima doctor .
 sima backend add <name> --kind <claude-code|codex> --executable <path>
-sima backend doctor <name> .
 sima brief "small real task" --path .
 sima learn --backend <name> --task "small real task" --path .
 sima candidates list --status all --path .
@@ -67,7 +66,7 @@ sima brief "follow-up task" --path .
 For each pilot run, collect:
 
 1. **Setup friction** — what command/config step was unclear?
-2. **Backend friction** — did Claude/Codex return valid JSON/schema output?
+2. **Backend friction** — did Claude/Codex executable/config resolution work, and did the first real `sima learn` run produce usable structured output?
 3. **Brief quality** — was retrieved memory/skill context useful or noisy?
 4. **Proposal quality** — did proposed memory/skill feel durable, triggerable, and non-transient?
 5. **Archivist quality** — did apply/defer/reject match human judgment?
@@ -81,7 +80,6 @@ Before inviting more than 1–2 technical teammates, complete:
 
 - [x] config-driven learn defaults in `.sima/config.yaml`;
 - [x] `sima doctor` covers config, directories, auto-learning defaults, backend executables, lint, and candidate queue health;
-- [ ] `sima backend doctor` verifies executable, prompt round-trip, JSON output, and schema mode when configured;
 - [ ] `sima learn` prints a concise final summary;
 - [ ] `sima learn --json` or equivalent machine-readable summary exists for wrappers;
 - [ ] short 5-minute setup guide exists;
@@ -116,8 +114,7 @@ The team alpha is successful when:
    - `learn.auto_cleanup_deferred`;
    - CLI flags override config.
 2. `sima doctor` alpha preflight.
-3. `sima backend doctor` real backend preflight.
-4. `sima learn` final summary and `--json`.
-5. 5-minute setup guide.
-6. Managed instructions for Claude Code / Codex.
-7. Team-scope review-required flow.
+3. `sima learn` final summary and `--json`.
+4. 5-minute setup guide.
+5. Managed instructions for Claude Code / Codex.
+6. Team-scope review-required flow.
