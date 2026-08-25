@@ -18,10 +18,9 @@ memory_types:
   - invariant
   - gotcha
   - workflow
-  - rejected_approach
-  - open_question
-  - anti_pattern
   - guardrail
+  - anti_pattern
+  - open_question
 proposal_operations:
   - create
   - update
@@ -132,7 +131,7 @@ Return JSON only: no Markdown fences and no prose before or after the JSON. Use 
 {
   "proposed_memory": [
     {
-      "type": "gotcha|workflow|decision|guardrail|invariant|anti_pattern",
+      "type": "decision|invariant|gotcha|workflow|guardrail|anti_pattern|open_question",
       "title": "Short durable lesson title",
       "trigger": "When a future agent should recall this memory.",
       "summary": "Evidence-backed lesson; no transient task progress."

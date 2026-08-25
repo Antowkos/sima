@@ -98,8 +98,8 @@ func TestBuildArgsAddsClaudeJSONSchemaMode(t *testing.T) {
 			t.Fatalf("args[%d] = %q, want %q; args=%v", i, args[i], value, args)
 		}
 	}
-	if !strings.Contains(args[4], "proposed_memory") || !strings.Contains(args[4], "required") {
-		t.Fatalf("json schema missing proposal fields: %s", args[4])
+	if !strings.Contains(args[4], "proposed_memory") || !strings.Contains(args[4], "enum") || !strings.Contains(args[4], "open_question") {
+		t.Fatalf("json schema missing strict proposal fields: %s", args[4])
 	}
 	if args[len(args)-1] != "do task" {
 		t.Fatalf("prompt arg = %q, want do task; args=%v", args[len(args)-1], args)

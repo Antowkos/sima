@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/contracts"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
 )
@@ -124,7 +125,7 @@ func decideWithModel(projectRoot, proposalPath string, p proposal.Proposal, back
 	if decision.Wrapper != nil {
 		decision = *decision.Wrapper
 	}
-	if !oneOf(decision.Decision, []string{"apply", "defer", "reject"}) {
+	if !oneOf(decision.Decision, contracts.ArchivistDecisions) {
 		return p, "", nil, fmt.Errorf("model archivist decision must be apply, defer, or reject")
 	}
 	if decision.Learning.Destination != "" {
@@ -146,17 +147,17 @@ func decideWithModel(projectRoot, proposalPath string, p proposal.Proposal, back
 
 func validateModelLearning(decision string, learning proposal.Learning) []string {
 	var problems []string
-	if !oneOf(learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
+	if !oneOf(learning.Destination, contracts.LearningDestinations) {
 		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")
 	}
-	if !oneOf(learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
+	if !oneOf(learning.Operation, contracts.ProposalOperations) {
 		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
 	}
 	if decision == "apply" && oneOf(learning.Operation, []string{"update", "deprecate", "supersede"}) {
 		if strings.TrimSpace(learning.Target.Path) == "" {
 			problems = append(problems, "learning.target.path is required for apply with update, deprecate, or supersede")
 		}
-		if !oneOf(learning.Target.Kind, []string{"memory", "skill"}) {
+		if !oneOf(learning.Target.Kind, contracts.LearningTargetKinds) {
 			problems = append(problems, "learning.target.kind must be memory or skill for apply with update, deprecate, or supersede")
 		}
 	}
@@ -215,11 +216,11 @@ Judge only this bounded proposal, evidence packet, and active-knowledge context.
 
 Required JSON shape:
 {
-  "decision": "apply|defer|reject",
+  "decision": "%s",
   "learning": {
-    "destination": "memory|skill|mixed|session_only|reject",
-    "operation": "create|update|supersede|deprecate",
-    "target": {"kind": "memory|skill", "path": "optional existing target path", "id": "optional target id"},
+    "destination": "%s",
+    "operation": "%s",
+    "target": {"kind": "%s", "path": "optional existing target path", "id": "optional target id"},
     "quality": {"durable": true, "triggerable": true, "evidence_backed": true, "non_transient": true, "reusable": true},
     "notes": ["short reasons"]
   },
@@ -245,7 +246,7 @@ Active knowledge context:
 ---BEGIN ACTIVE KNOWLEDGE---
 %s
 ---END ACTIVE KNOWLEDGE---
-`, projectRoot, rel(projectRoot, proposalPath), string(proposalData), evidencePacket, activeKnowledge), nil
+`, contracts.Join(contracts.ArchivistDecisions), contracts.Join(contracts.LearningDestinations), contracts.Join(contracts.ProposalOperations), contracts.Join(contracts.LearningTargetKinds), projectRoot, rel(projectRoot, proposalPath), string(proposalData), evidencePacket, activeKnowledge), nil
 }
 
 func buildEvidencePacket(projectRoot string, p proposal.Proposal) string {
@@ -390,7 +391,7 @@ func buildArchivistArgs(profile config.BackendProfile, prompt string) []string {
 	case "claude-code":
 		args := []string{"-p"}
 		if profile.Metadata["output_format"] == "json_schema" {
-			args = append(args, "--output-format", "json", "--json-schema", archivistJSONSchema)
+			args = append(args, "--output-format", "json", "--json-schema", contracts.ArchivistJSONSchema)
 		}
 		return append(args, prompt)
 	case "codex":
@@ -428,47 +429,6 @@ func expandHome(path string) string {
 	}
 	return path
 }
-
-const archivistJSONSchema = `{
-  "type": "object",
-  "properties": {
-    "decision": {"type": "string", "enum": ["apply", "defer", "reject"]},
-    "learning": {
-      "type": "object",
-      "properties": {
-        "destination": {"type": "string", "enum": ["memory", "skill", "mixed", "session_only", "reject"]},
-        "operation": {"type": "string", "enum": ["create", "update", "supersede", "deprecate"]},
-        "target": {
-          "type": "object",
-          "properties": {
-            "kind": {"type": "string"},
-            "path": {"type": "string"},
-            "id": {"type": "string"}
-          },
-          "additionalProperties": false
-        },
-        "quality": {
-          "type": "object",
-          "properties": {
-            "durable": {"type": "boolean"},
-            "triggerable": {"type": "boolean"},
-            "evidence_backed": {"type": "boolean"},
-            "non_transient": {"type": "boolean"},
-            "reusable": {"type": "boolean"}
-          },
-          "required": ["durable", "triggerable", "evidence_backed", "non_transient", "reusable"],
-          "additionalProperties": false
-        },
-        "notes": {"type": "array", "items": {"type": "string"}}
-      },
-      "required": ["destination", "operation", "quality"],
-      "additionalProperties": false
-    },
-    "notes": {"type": "array", "items": {"type": "string"}}
-  },
-  "required": ["decision", "learning", "notes"],
-  "additionalProperties": false
-}`
 
 func decideLearning(p proposal.Proposal) (string, []string, bool) {
 	if p.Learning.Destination == "" {

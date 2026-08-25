@@ -12,6 +12,7 @@ import (
 
 	"github.com/antowkos/sima/internal/brief"
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/contracts"
 )
 
 type Options struct {
@@ -174,7 +175,7 @@ If you learned durable, triggerable lessons, include them as:
 {
   "proposed_memory": [
     {
-      "type": "gotcha|workflow|decision|invariant|rejected_approach|open_question|anti_pattern|guardrail",
+      "type": "%s",
       "title": "short title",
       "trigger": "when a future agent should recall it",
       "summary": "durable evidence-backed lesson"
@@ -189,7 +190,7 @@ If you learned durable, triggerable lessons, include them as:
   ]
 }
 
-Do not propose transient task progress, raw logs, PR/issue status, or lessons from weakened tests/bypassed validation.`, briefPath, task)
+Do not propose transient task progress, raw logs, PR/issue status, or lessons from weakened tests/bypassed validation.`, briefPath, task, contracts.Join(contracts.MemoryTypes))
 }
 
 func buildArgs(profile config.BackendProfile, prompt string) []string {
@@ -197,7 +198,7 @@ func buildArgs(profile config.BackendProfile, prompt string) []string {
 	case "claude-code":
 		args := []string{"-p"}
 		if profile.Metadata["output_format"] == "json_schema" {
-			args = append(args, "--output-format", "json", "--json-schema", workerJSONSchema)
+			args = append(args, "--output-format", "json", "--json-schema", contracts.WorkerJSONSchema)
 		}
 		return append(args, prompt)
 	case "codex":
@@ -206,41 +207,6 @@ func buildArgs(profile config.BackendProfile, prompt string) []string {
 		return []string{prompt}
 	}
 }
-
-const workerJSONSchema = `{
-  "type": "object",
-  "properties": {
-    "status": {"type": "string"},
-    "proposed_memory": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "type": {"type": "string"},
-          "title": {"type": "string"},
-          "trigger": {"type": "string"},
-          "summary": {"type": "string"}
-        },
-        "required": ["type", "title", "trigger", "summary"],
-        "additionalProperties": false
-      }
-    },
-    "proposed_skills": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {"type": "string"},
-          "trigger": {"type": "string"},
-          "summary": {"type": "string"}
-        },
-        "required": ["name", "trigger", "summary"],
-        "additionalProperties": false
-      }
-    }
-  },
-  "additionalProperties": false
-}`
 
 func runCommand(cmd *exec.Cmd) ([]byte, []byte, int) {
 	var exitCode int

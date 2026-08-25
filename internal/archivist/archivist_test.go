@@ -201,6 +201,25 @@ func TestDecideUsesModelArchivistBackend(t *testing.T) {
 	}
 }
 
+func TestBuildArchivistArgsUsesStrictSharedSchema(t *testing.T) {
+	args := buildArchivistArgs(config.BackendProfile{Kind: "claude-code", Metadata: map[string]string{"output_format": "json_schema"}}, "review")
+	want := []string{"-p", "--output-format", "json", "--json-schema"}
+	for i, value := range want {
+		if args[i] != value {
+			t.Fatalf("args[%d] = %q, want %q; args=%v", i, args[i], value, args)
+		}
+	}
+	schema := args[4]
+	for _, want := range []string{"\"decision\": {\"type\": \"string\", \"enum\":", "\"apply\"", "\"defer\"", "\"reject\"", "\"kind\": {\"type\": \"string\", \"enum\": [\"memory\",\"skill\"]}", "\"additionalProperties\": false"} {
+		if !strings.Contains(schema, want) {
+			t.Fatalf("archivist schema missing %q: %s", want, schema)
+		}
+	}
+	if args[len(args)-1] != "review" {
+		t.Fatalf("prompt arg = %q, want review; args=%v", args[len(args)-1], args)
+	}
+}
+
 func TestDecideAllowsModelRejectWithoutLifecycleTarget(t *testing.T) {
 	root, proposalPath := createProposal(t, "model archivist reject proposal", false)
 	script := filepath.Join(root, "model-archivist-reject.sh")

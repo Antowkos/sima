@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/antowkos/sima/internal/contracts"
 	"github.com/antowkos/sima/internal/proposal"
 )
 
@@ -98,16 +99,16 @@ func validate(p proposal.Proposal) []string {
 	if p.Scope != "personal" && p.Scope != "team" {
 		problems = append(problems, "scope must be personal or team")
 	}
-	if !oneOf(p.Operation, []string{"create", "update", "deprecate", "supersede"}) {
+	if !oneOf(p.Operation, contracts.ProposalOperations) {
 		problems = append(problems, "unsupported operation")
 	}
-	if !oneOf(p.Status, []string{"candidate", "applied", "rejected", "deferred", "session_only"}) {
+	if !oneOf(p.Status, contracts.ProposalStatuses) {
 		problems = append(problems, "unsupported status")
 	}
-	if !oneOf(p.ArchivistDecision, []string{"apply", "reject", "defer"}) {
+	if !oneOf(p.ArchivistDecision, contracts.ArchivistDecisions) {
 		problems = append(problems, "archivist_decision must be apply, reject, or defer")
 	}
-	if !oneOf(p.Safety.Decision, []string{"safe", "suspicious", "unsafe"}) {
+	if !oneOf(p.Safety.Decision, contracts.SafetyDecisions) {
 		problems = append(problems, "safety.decision must be safe, suspicious, or unsafe")
 	}
 	if p.Run.ID == "" || p.Run.Path == "" {
@@ -116,20 +117,20 @@ func validate(p proposal.Proposal) []string {
 	if len(p.Evidence) == 0 {
 		problems = append(problems, "missing evidence")
 	}
-	if p.CandidateSource != "" && !oneOf(p.CandidateSource, []string{"structured", "structured_invalid"}) {
+	if p.CandidateSource != "" && !oneOf(p.CandidateSource, contracts.CandidateSources) {
 		problems = append(problems, "candidate_source must be structured or structured_invalid")
 	}
-	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
+	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, contracts.LearningDestinations) {
 		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")
 	}
-	if p.Learning.Operation != "" && !oneOf(p.Learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
+	if p.Learning.Operation != "" && !oneOf(p.Learning.Operation, contracts.ProposalOperations) {
 		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
 	}
 	if oneOf(p.Learning.Operation, []string{"update", "deprecate", "supersede"}) {
 		if strings.TrimSpace(p.Learning.Target.Path) == "" {
 			problems = append(problems, "learning.target.path is required for update, deprecate, or supersede")
 		}
-		if !oneOf(p.Learning.Target.Kind, []string{"memory", "skill"}) {
+		if !oneOf(p.Learning.Target.Kind, contracts.LearningTargetKinds) {
 			problems = append(problems, "learning.target.kind must be memory or skill")
 		}
 	}
@@ -167,8 +168,8 @@ func validate(p proposal.Proposal) []string {
 
 func validateMemoryQuality(i int, c proposal.Candidate) []string {
 	var problems []string
-	if !oneOf(strings.TrimSpace(c.Type), []string{"decision", "invariant", "gotcha", "workflow", "guardrail", "anti_pattern", "open_question"}) {
-		problems = append(problems, fmt.Sprintf("candidate_memories[%d] type must be decision, invariant, gotcha, workflow, guardrail, anti_pattern, or open_question", i))
+	if !oneOf(strings.TrimSpace(c.Type), contracts.MemoryTypes) {
+		problems = append(problems, fmt.Sprintf("candidate_memories[%d] type must be %s", i, contracts.EnglishList(contracts.MemoryTypes)))
 	}
 	trigger := strings.TrimSpace(c.Trigger)
 	summary := strings.TrimSpace(c.Summary)
