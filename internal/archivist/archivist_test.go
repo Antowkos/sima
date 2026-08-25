@@ -152,6 +152,7 @@ func TestDecideDefersSimilarActiveSkill(t *testing.T) {
 	}
 	active := `---
 name: structured-proposal-skill
+status: active
 ---
 # structured-proposal-skill
 

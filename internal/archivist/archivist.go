@@ -352,7 +352,7 @@ func activeKnowledgeFile(path string) bool {
 		return false
 	}
 	status := statusFromContent(path, string(data))
-	return status == "" || status == "active"
+	return status == "active"
 }
 
 func statusFromContent(path, content string) string {

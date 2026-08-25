@@ -60,21 +60,24 @@ evidence:
 	}
 }
 
-func TestCheckTreatsMissingStatusAsActive(t *testing.T) {
+func TestCheckRequiresExplicitStatus(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {
 		t.Fatal(err)
 	}
 	memoryDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
-	if err := os.WriteFile(filepath.Join(memoryDir, "legacy.yaml"), []byte("id: legacy\ntype: workflow\ntitle: Legacy active\ntrigger: When checking legacy cards.\nsummary: Missing status remains active for backwards compatibility.\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(memoryDir, "missing-status.yaml"), []byte("id: missing\ntype: workflow\ntitle: Missing status\ntrigger: When checking cards before release.\nsummary: Cards must carry explicit lifecycle status during active product development.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	result, err := Check(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ErrorCount() != 0 || result.WarningCount() != 0 {
-		t.Fatalf("expected clean lint, got %+v", result.Issues)
+	if result.ErrorCount() != 1 || result.WarningCount() != 0 {
+		t.Fatalf("expected one missing-status error, got %+v", result.Issues)
+	}
+	if !strings.Contains(joinIssues(result.Issues), "status is required") {
+		t.Fatalf("expected missing status issue, got %+v", result.Issues)
 	}
 }
 

@@ -23,7 +23,7 @@ func TestGenerateWritesBriefWithSddArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	memoryPath := filepath.Join(root, ".sima", "personal", "memory", "cards", "gotcha.yaml")
-	if err := os.WriteFile(memoryPath, []byte("id: gotcha\ntype: gotcha\ntitle: Remember active cards\ntrigger: When building a SIMA brief\nsummary: Active memory content should appear in the brief.\n"), 0o644); err != nil {
+	if err := os.WriteFile(memoryPath, []byte("id: gotcha\nstatus: active\ntype: gotcha\ntitle: Remember active cards\ntrigger: When building a SIMA brief\nsummary: Active memory content should appear in the brief.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	deprecatedMemoryPath := filepath.Join(root, ".sima", "personal", "memory", "cards", "deprecated.yaml")
@@ -31,7 +31,7 @@ func TestGenerateWritesBriefWithSddArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	skillPath := filepath.Join(root, ".sima", "personal", "skills", "active", "brief-skill.md")
-	if err := os.WriteFile(skillPath, []byte("# Brief Skill\n\nUse when testing active skill snippets.\n"), 0o644); err != nil {
+	if err := os.WriteFile(skillPath, []byte("---\nstatus: active\n---\n# Brief Skill\n\nUse when testing active skill snippets.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	supersededSkillPath := filepath.Join(root, ".sima", "personal", "skills", "active", "old-skill.md")

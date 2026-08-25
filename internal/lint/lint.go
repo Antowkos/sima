@@ -109,9 +109,8 @@ func lintStore(projectRoot string, store storeSpec) []Issue {
 		}
 		status := normalizeStatus(meta.Status)
 		if status == "" {
-			status = "active"
-		}
-		if !oneOf(status, []string{"active", "deprecated", "superseded", "archived"}) {
+			issues = append(issues, Issue{Severity: "error", Path: relPath, Message: "status is required"})
+		} else if !oneOf(status, []string{"active", "deprecated", "superseded", "archived"}) {
 			issues = append(issues, Issue{Severity: "error", Path: relPath, Message: "status must be active, deprecated, superseded, or archived"})
 		}
 		if store.kind == "memory" {
@@ -132,7 +131,7 @@ func lintMemory(path string, meta knowledgeMeta) []Issue {
 	if strings.TrimSpace(meta.Type) != "" && !oneOf(meta.Type, contracts.MemoryTypes) {
 		issues = append(issues, Issue{Severity: "error", Path: path, Message: "memory type is unsupported"})
 	}
-	if normalizeStatus(meta.Status) == "active" || strings.TrimSpace(meta.Status) == "" {
+	if normalizeStatus(meta.Status) == "active" {
 		if strings.TrimSpace(meta.Summary) == "" {
 			issues = append(issues, Issue{Severity: "warn", Path: path, Message: "active memory summary is empty"})
 		}

@@ -583,6 +583,9 @@ func readActiveSkills(projectRoot string) []activeSkillRef {
 		if err != nil {
 			continue
 		}
+		if !isActiveStatus(extractSkillStatus(string(data))) {
+			continue
+		}
 		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
 		refs = append(refs, activeSkillRef{ID: name, Path: rel(projectRoot, path), NameSlug: slug(name), TriggerSlug: slug(extractSkillTrigger(string(data)))})
 	}
@@ -604,8 +607,30 @@ func extractSkillTrigger(text string) string {
 	return ""
 }
 
+func extractSkillStatus(text string) string {
+	return frontmatterValue(text, "status")
+}
+
+func frontmatterValue(content, key string) string {
+	if !strings.HasPrefix(content, "---\n") {
+		return ""
+	}
+	parts := strings.SplitN(content, "\n---\n", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	prefix := key + ":"
+	for _, line := range strings.Split(parts[0], "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
+}
+
 func isActiveStatus(status string) bool {
-	return status == "" || status == "active"
+	return status == "active"
 }
 
 func isYAML(name string) bool {

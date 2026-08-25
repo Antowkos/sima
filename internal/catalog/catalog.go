@@ -83,8 +83,9 @@ func listRoot(projectRoot string, root rootSpec, statusFilter string) []Item {
 		}
 		meta := parseMeta(path, string(data))
 		status := normalizeStatus(meta.Status)
-		if status == "" {
-			status = "active"
+		displayStatus := status
+		if displayStatus == "" {
+			displayStatus = "missing"
 		}
 		if statusFilter != "all" && status != statusFilter {
 			return nil
@@ -99,7 +100,7 @@ func listRoot(projectRoot string, root rootSpec, statusFilter string) []Item {
 		if title == "" {
 			title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
-		items = append(items, Item{Status: status, Scope: root.scope, Kind: root.kind, Title: title, Path: rel(projectRoot, path)})
+		items = append(items, Item{Status: displayStatus, Scope: root.scope, Kind: root.kind, Title: title, Path: rel(projectRoot, path)})
 		return nil
 	})
 	return items
