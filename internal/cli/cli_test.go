@@ -384,6 +384,68 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	}
 }
 
+func TestLearnCommandNoAutoApplyLeavesReadyProposalPending(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	worker := filepath.Join(root, "structured-worker.sh")
+	if err := os.WriteFile(worker, []byte("#!/bin/sh\ncat <<'JSON'\n{\"proposed_memory\":[{\"type\":\"workflow\",\"title\":\"Structured inspect-only learn candidate\",\"trigger\":\"When sima learn runs with no-auto-apply.\",\"summary\":\"sima learn should leave apply-ready proposals pending when --no-auto-apply is set.\"}]}\nJSON\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "structured", "--kind", "codex", "--executable", worker, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	reviewer := filepath.Join(root, "reviewer.sh")
+	reviewerJSON := `{"decision":"apply","learning":{"destination":"memory","operation":"create","quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["model reviewer approved structured learning"]},"notes":["clean reviewer approved"]}`
+	if err := os.WriteFile(reviewer, []byte("#!/bin/sh\nprintf '%s\\n' '"+reviewerJSON+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "backend", "add", "reviewer", "--kind", "claude-code", "--executable", reviewer, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("reviewer backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "structured", "--archivist-backend", "reviewer", "--task", "capture inspect-only structured lesson", "--no-auto-apply", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("learn --no-auto-apply code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Archivist decision: apply", "Learn auto-apply: proposal passed apply-ready gates", "Learn stopped: --no-auto-apply set; proposal remains pending"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("learn --no-auto-apply output missing %q: %q", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "Applied proposal:") {
+		t.Fatalf("learn --no-auto-apply should not apply: %q", out.String())
+	}
+	cards, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "cards"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 0 {
+		t.Fatalf("expected no applied cards, got %d", len(cards))
+	}
+	proposals, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("expected one proposal, got %d", len(proposals))
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", proposals[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: candidate") || !strings.Contains(string(data), "archivist_decision: apply") {
+		t.Fatalf("proposal should remain pending/apply-ready:\n%s", data)
+	}
+}
+
 func TestLintCommand(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

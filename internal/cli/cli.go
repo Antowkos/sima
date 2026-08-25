@@ -80,7 +80,7 @@ Usage:
   sima lint [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
-  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]
+  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -325,6 +325,7 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	backendName := ""
 	archivistBackendName := ""
 	task := ""
+	autoApply := true
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -356,13 +357,15 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			root = args[i]
+		case "--no-auto-apply":
+			autoApply = false
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
 			return 2
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--path <path>]")
 		return 2
 	}
 	if archivistBackendName == "" {
@@ -433,6 +436,10 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(stdout, "Learn auto-apply: proposal passed apply-ready gates")
+	if !autoApply {
+		fmt.Fprintf(stdout, "Learn stopped: --no-auto-apply set; proposal remains pending at %s\n", readyItem.Path)
+		return 0
+	}
 	applyResult, err := apply.Apply(abs, apply.Options{Target: readyItem.Path})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn apply failed: %v\n", err)
