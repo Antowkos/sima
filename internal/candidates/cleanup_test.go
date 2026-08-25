@@ -89,9 +89,17 @@ candidate_memories:
     title: Inspect candidates
     trigger: When candidate queues need review.
     summary: Candidate list and show expose proposal metadata before mutation.
+    evidence:
+      - kind: task
+        path: .sima/personal/runs/run/task.md
+        note: original task
 run:
   id: run
   path: .sima/personal/runs/run
+evidence:
+  - kind: task
+    path: .sima/personal/runs/run/task.md
+    note: original task
 `
 	if err := os.WriteFile(filepath.Join(candidateDir, "inspect-me.yaml"), []byte(candidate), 0o644); err != nil {
 		t.Fatal(err)
@@ -109,12 +117,30 @@ run:
 	if len(items) != 1 || items[0].ID != "inspect-me" || items[0].Destination != "memory" || items[0].Candidates != 1 {
 		t.Fatalf("unexpected candidate list: %+v", items)
 	}
+	ready, err := ApplyReady(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready) != 0 {
+		t.Fatalf("candidate without quality flags should not be apply-ready: %+v", ready)
+	}
+	readyText := strings.Replace(candidate, "  operation: create\n", "  operation: create\n  quality:\n    durable: true\n    triggerable: true\n    evidence_backed: true\n    non_transient: true\n    reusable: true\n", 1)
+	if err := os.WriteFile(filepath.Join(candidateDir, "ready.yaml"), []byte(strings.Replace(readyText, "id: inspect-me", "id: ready", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ready, err = ApplyReady(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready) != 1 || ready[0].ID != "ready" {
+		t.Fatalf("unexpected apply-ready candidates: %+v", ready)
+	}
 	all, err := List(root, ListOptions{Status: "all"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 2 {
-		t.Fatalf("expected two all-status candidates, got %+v", all)
+	if len(all) != 3 {
+		t.Fatalf("expected three all-status candidates, got %+v", all)
 	}
 	shown, err := Show(root, "inspect-me")
 	if err != nil {

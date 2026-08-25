@@ -86,6 +86,7 @@ Usage:
   sima apply <proposal-id|path> [--path <path>]
   sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
   sima candidates list [--status <candidate|deferred|applied|rejected|all>] [--path <path>]
+  sima candidates apply-ready [--path <path>]
   sima candidates show <id|path> [--path <path>]
   sima candidates cleanup [--path <path>]
   sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
@@ -811,6 +812,8 @@ func runCandidates(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "list":
 		return runCandidatesList(args[1:], stdout, stderr)
+	case "apply-ready":
+		return runCandidatesApplyReady(args[1:], stdout, stderr)
 	case "show":
 		return runCandidatesShow(args[1:], stdout, stderr)
 	case "cleanup":
@@ -855,11 +858,45 @@ func runCandidatesList(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "candidate list failed: %v\n", err)
 		return 1
 	}
+	printCandidateItems(stdout, items)
+	return 0
+}
+
+func runCandidatesApplyReady(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	items, err := candidates.ApplyReady(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "candidate apply-ready failed: %v\n", err)
+		return 1
+	}
+	printCandidateItems(stdout, items)
+	return 0
+}
+
+func printCandidateItems(stdout io.Writer, items []candidates.Item) {
 	fmt.Fprintln(stdout, "STATUS	DECISION	SAFETY	DESTINATION	OPERATION	CANDIDATES	ID	PATH")
 	for _, item := range items {
 		fmt.Fprintf(stdout, "%s	%s	%s	%s	%s	%d	%s	%s\n", item.Status, item.Decision, item.Safety, item.Destination, item.Operation, item.Candidates, item.ID, item.Path)
 	}
-	return 0
 }
 
 func runCandidatesShow(args []string, stdout, stderr io.Writer) int {

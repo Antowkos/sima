@@ -425,6 +425,20 @@ func TestCandidatesListAndShowCommands(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
+	code = Run([]string{"sima", "candidates", "apply-ready", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("candidates apply-ready code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if strings.Contains(out.String(), "inspect-me") {
+		t.Fatalf("candidate without quality flags should not be apply-ready:\n%s", out.String())
+	}
+	for _, want := range []string{"STATUS	DECISION	SAFETY	DESTINATION	OPERATION	CANDIDATES	ID	PATH"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("candidate apply-ready missing %q:\n%s", want, out.String())
+		}
+	}
+	out.Reset()
+	stderr.Reset()
 	code = Run([]string{"sima", "candidates", "show", "inspect-me", "--path", root}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("candidates show code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())

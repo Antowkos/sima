@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/antowkos/sima/internal/proposal"
+	"github.com/antowkos/sima/internal/review"
 )
 
 type CleanupOptions struct {
@@ -61,28 +62,50 @@ func List(projectRoot string, opts ListOptions) ([]Item, error) {
 			continue
 		}
 		path := filepath.Join(candidateDir, entry.Name())
-		data, err := os.ReadFile(path)
+		item, _, err := readItem(projectRoot, path)
 		if err != nil {
 			return nil, err
 		}
-		var p proposal.Proposal
-		if err := yaml.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
-		}
-		status := strings.TrimSpace(strings.ToLower(p.Status))
+		status := strings.TrimSpace(strings.ToLower(item.Status))
 		if statusFilter != "all" && status != statusFilter {
 			continue
 		}
-		items = append(items, Item{
-			ID:          p.ID,
-			Status:      p.Status,
-			Decision:    p.ArchivistDecision,
-			Safety:      p.Safety.Decision,
-			Destination: p.Learning.Destination,
-			Operation:   p.Learning.Operation,
-			Candidates:  len(p.CandidateMemories) + len(p.CandidateSkills),
-			Path:        rel(projectRoot, path),
-		})
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	return items, nil
+}
+
+func ApplyReady(projectRoot string) ([]Item, error) {
+	reviewResult, err := review.Review(projectRoot, review.Options{All: true})
+	if err != nil {
+		return nil, err
+	}
+	validByPath := map[string]bool{}
+	for _, item := range reviewResult.Items {
+		validByPath[item.Path] = len(item.Problems) == 0
+	}
+	candidateDir := filepath.Join(projectRoot, ".sima", "personal", "memory", "candidates")
+	entries, err := os.ReadDir(candidateDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var items []Item
+	for _, entry := range entries {
+		if entry.IsDir() || !isYAML(entry.Name()) {
+			continue
+		}
+		path := filepath.Join(candidateDir, entry.Name())
+		item, p, err := readItem(projectRoot, path)
+		if err != nil {
+			return nil, err
+		}
+		if validByPath[item.Path] && isApplyReady(p) {
+			items = append(items, item)
+		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
 	return items, nil
@@ -102,6 +125,72 @@ func Show(projectRoot, target string) (ShowResult, error) {
 		return ShowResult{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return ShowResult{Path: rel(projectRoot, path), Content: string(data), Proposal: p}, nil
+}
+
+func readItem(projectRoot, path string) (Item, proposal.Proposal, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Item{}, proposal.Proposal{}, err
+	}
+	var p proposal.Proposal
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		return Item{}, proposal.Proposal{}, fmt.Errorf("parse %s: %w", path, err)
+	}
+	item := Item{
+		ID:          p.ID,
+		Status:      p.Status,
+		Decision:    p.ArchivistDecision,
+		Safety:      p.Safety.Decision,
+		Destination: p.Learning.Destination,
+		Operation:   p.Learning.Operation,
+		Candidates:  len(p.CandidateMemories) + len(p.CandidateSkills),
+		Path:        rel(projectRoot, path),
+	}
+	return item, p, nil
+}
+
+func isApplyReady(p proposal.Proposal) bool {
+	if p.Status != "candidate" || p.Scope != "personal" || p.Safety.Decision != "safe" || p.ArchivistDecision != "apply" {
+		return false
+	}
+	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, []string{"memory", "skill", "mixed"}) {
+		return false
+	}
+	if p.Learning.Destination != "" && !learningQualityPasses(p.Learning.Quality) {
+		return false
+	}
+	op := p.Learning.Operation
+	if op == "" {
+		op = p.Operation
+	}
+	if op == "" {
+		op = "create"
+	}
+	if !oneOf(op, []string{"create", "update", "deprecate", "supersede"}) {
+		return false
+	}
+	if op != "deprecate" && len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
+		return false
+	}
+	if oneOf(op, []string{"update", "deprecate", "supersede"}) {
+		if strings.TrimSpace(p.Learning.Target.Path) == "" || !oneOf(p.Learning.Target.Kind, []string{"memory", "skill"}) {
+			return false
+		}
+	}
+	return true
+}
+
+func learningQualityPasses(q proposal.LearningQuality) bool {
+	return q.Durable && q.Triggerable && q.EvidenceBacked && q.NonTransient && q.Reusable
+}
+
+func oneOf(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 // CleanupDeferred marks deferred pending proposals as no longer pending.
