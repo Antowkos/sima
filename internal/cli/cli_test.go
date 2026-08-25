@@ -735,3 +735,73 @@ func TestBackendAddListDoctor(t *testing.T) {
 		t.Fatalf("config.yaml missing: %v", statErr)
 	}
 }
+
+func TestDoctorRequiresBackendForAlphaPreflight(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "doctor", root}, &out, &stderr)
+	if code == 0 {
+		t.Fatalf("doctor unexpectedly passed without backend: stdout = %s", out.String())
+	}
+	if !strings.Contains(out.String(), "[fail] backends: configured") || !strings.Contains(stderr.String(), "SIMA doctor found problems") {
+		t.Fatalf("doctor missing backend failure: stdout = %s stderr = %s", out.String(), stderr.String())
+	}
+}
+
+func TestDoctorPassesAlphaPreflightWithBackend(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "test", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "doctor", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("doctor code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"[ok] config: learn auto_apply", "[ok] config: learn auto_cleanup_deferred", "[ok] backends: configured", "[ok] backend: test", "[ok] lint: errors: 0 errors, 0 warnings", "[ok] candidates: queue: 0 pending candidates"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("doctor output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestDoctorFailsWhenAutoLearningDisabled(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Learn.AutoApply = false
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "test", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "doctor", root}, &out, &stderr)
+	if code == 0 {
+		t.Fatalf("doctor unexpectedly passed with auto_apply disabled: stdout = %s", out.String())
+	}
+	if !strings.Contains(out.String(), "[fail] config: learn auto_apply") {
+		t.Fatalf("doctor missing auto_apply failure: stdout = %s", out.String())
+	}
+}

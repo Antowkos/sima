@@ -80,7 +80,7 @@ For each pilot run, collect:
 Before inviting more than 1–2 technical teammates, complete:
 
 - [x] config-driven learn defaults in `.sima/config.yaml`;
-- [ ] `sima doctor` covers config, directories, lint, and candidate queue health;
+- [x] `sima doctor` covers config, directories, auto-learning defaults, backend executables, lint, and candidate queue health;
 - [ ] `sima backend doctor` verifies executable, prompt round-trip, JSON output, and schema mode when configured;
 - [ ] `sima learn` prints a concise final summary;
 - [ ] `sima learn --json` or equivalent machine-readable summary exists for wrappers;

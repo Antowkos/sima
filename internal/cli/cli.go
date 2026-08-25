@@ -161,22 +161,88 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 
 	report := simafs.Doctor(abs)
 	fmt.Fprintf(stdout, "SIMA doctor for %s\n", abs)
+	failed := false
 	for _, check := range report.Checks {
-		mark := "ok"
-		if !check.OK {
-			mark = "fail"
+		if !printDoctorCheck(stdout, check.OK, "project: "+check.Name, check.Detail) {
+			failed = true
 		}
-		fmt.Fprintf(stdout, "[%s] %s", mark, check.Name)
-		if check.Detail != "" {
-			fmt.Fprintf(stdout, ": %s", check.Detail)
-		}
-		fmt.Fprintln(stdout)
 	}
-	if !report.OK() {
+
+	cfg, err := config.Load(abs)
+	if err != nil {
+		printDoctorCheck(stdout, false, "config: load", err.Error())
+		failed = true
+	} else {
+		printDoctorCheck(stdout, true, "config: load", "version loaded")
+		learnDetail := fmt.Sprintf("auto_apply=%t auto_cleanup_deferred=%t", cfg.Learn.AutoApply, cfg.Learn.AutoCleanupDeferred)
+		if !printDoctorCheck(stdout, cfg.Learn.AutoApply, "config: learn auto_apply", learnDetail) {
+			failed = true
+		}
+		if !printDoctorCheck(stdout, cfg.Learn.AutoCleanupDeferred, "config: learn auto_cleanup_deferred", learnDetail) {
+			failed = true
+		}
+
+		backendNames := make([]string, 0, len(cfg.Backends))
+		for name := range cfg.Backends {
+			backendNames = append(backendNames, name)
+		}
+		sort.Strings(backendNames)
+		if len(backendNames) == 0 {
+			printDoctorCheck(stdout, false, "backends: configured", "no backends configured; run sima backend add")
+			failed = true
+		} else {
+			printDoctorCheck(stdout, true, "backends: configured", fmt.Sprintf("%d backend(s): %s", len(backendNames), strings.Join(backendNames, ", ")))
+		}
+		for _, name := range backendNames {
+			result := backend.Doctor(name, cfg.Backends[name])
+			if !printDoctorCheck(stdout, result.OK, "backend: "+name, result.Detail) {
+				failed = true
+			}
+		}
+	}
+
+	lintResult, err := lint.Check(abs)
+	if err != nil {
+		printDoctorCheck(stdout, false, "lint: check", err.Error())
+		failed = true
+	} else {
+		lintOK := lintResult.ErrorCount() == 0
+		if !printDoctorCheck(stdout, lintOK, "lint: errors", fmt.Sprintf("%d errors, %d warnings", lintResult.ErrorCount(), lintResult.WarningCount())) {
+			failed = true
+		}
+		if lintResult.WarningCount() > 0 {
+			fmt.Fprintf(stdout, "[warn] lint: warnings: %d warnings; inspect with sima lint %s\n", lintResult.WarningCount(), abs)
+		}
+	}
+
+	candidateItems, err := candidates.List(abs, candidates.ListOptions{Status: "candidate"})
+	if err != nil {
+		printDoctorCheck(stdout, false, "candidates: queue", err.Error())
+		failed = true
+	} else if len(candidateItems) == 0 {
+		printDoctorCheck(stdout, true, "candidates: queue", "0 pending candidates")
+	} else {
+		fmt.Fprintf(stdout, "[warn] candidates: queue: %d pending candidate(s); inspect with sima candidates list --path %s\n", len(candidateItems), abs)
+	}
+
+	if failed {
 		fmt.Fprintln(stderr, "SIMA doctor found problems")
 		return 1
 	}
 	return 0
+}
+
+func printDoctorCheck(w io.Writer, ok bool, name, detail string) bool {
+	mark := "ok"
+	if !ok {
+		mark = "fail"
+	}
+	fmt.Fprintf(w, "[%s] %s", mark, name)
+	if detail != "" {
+		fmt.Fprintf(w, ": %s", detail)
+	}
+	fmt.Fprintln(w)
+	return ok
 }
 
 func runLint(args []string, stdout, stderr io.Writer) int {
