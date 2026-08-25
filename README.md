@@ -12,6 +12,14 @@ Review gates follow Hermes-style learning hygiene: durable memory must be compac
 
 ## Team alpha
 
+Fast path from a SIMA source checkout:
+
+```bash
+./install.sh --project /path/to/pilot-repo
+```
+
+This builds `sima`, installs it to `~/.local/bin` by default, initializes project-local `.sima/` state, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks.
+
 See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
 
 ## Current slice

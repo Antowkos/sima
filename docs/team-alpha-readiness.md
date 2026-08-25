@@ -6,7 +6,7 @@ SIMA is moving from solo dogfood toward a small internal team alpha. The goal is
 
 Team alpha means:
 
-- technical teammates can install or build `sima` locally by following [5-Minute Setup](5-minute-setup.md);
+- technical teammates can install `sima` and initialize a pilot repo with one command from the SIMA checkout, or follow the manual path in [5-Minute Setup](5-minute-setup.md);
 - each pilot repo can run `sima init`, `sima install`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
 - at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
@@ -40,10 +40,9 @@ Rationale:
 Recommended first-session workflow for a teammate:
 
 ```bash
-sima init .
-sima install --path .
+./install.sh --project $PROJECT
+cd $PROJECT
 sima doctor .
-sima backend add <name> --kind <claude-code|codex> --executable <path>
 sima brief "small real task" --path .
 sima learn --backend <name> --task "small real task" --path .
 sima learn --backend <name> --task "small real task" --json --path .
@@ -85,6 +84,7 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] `sima learn` prints a concise final summary;
 - [x] `sima learn --json` emits a machine-readable summary for wrappers;
 - [x] `sima install` writes managed Claude Code/Codex project instructions;
+- [x] `install.sh` builds/installs the binary and can initialize a pilot repo with managed instructions plus backend/preflight setup;
 - [x] short [5-minute setup guide](5-minute-setup.md) exists;
 - [x] real Claude Code auto-learning dogfood completed on a small task;
   - result: `claude-schema` completed worker → structured proposal → clean archivist → apply-ready → auto-apply;
