@@ -325,6 +325,43 @@ func TestLearnCommandStopsWhenWorkerProposesNoLearning(t *testing.T) {
 	}
 }
 
+func TestLearnCommandAutoCleanupDeferred(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "backend", "add", "echo", "--kind", "codex", "--executable", "/bin/echo", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "echo", "--task", "capture no durable lesson", "--auto-cleanup-deferred", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("learn auto cleanup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Learn stopped: no structured learning candidates or lifecycle operation", "Deferred cleanup: 1"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("learn auto cleanup output missing %q: %q", want, out.String())
+		}
+	}
+	proposals, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("expected one audit proposal, got %d", len(proposals))
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", proposals[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: deferred") || !strings.Contains(string(data), "cleanup_note:") {
+		t.Fatalf("proposal should be cleaned to deferred:\n%s", data)
+	}
+}
+
 func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

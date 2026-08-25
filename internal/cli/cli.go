@@ -80,7 +80,7 @@ Usage:
   sima lint [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
-  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--path <path>]
+  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--auto-cleanup-deferred] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -326,6 +326,7 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	archivistBackendName := ""
 	task := ""
 	autoApply := true
+	autoCleanupDeferred := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -359,13 +360,15 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 			root = args[i]
 		case "--no-auto-apply":
 			autoApply = false
+		case "--auto-cleanup-deferred":
+			autoCleanupDeferred = true
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", arg)
 			return 2
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--no-auto-apply] [--auto-cleanup-deferred] [--path <path>]")
 		return 2
 	}
 	if archivistBackendName == "" {
@@ -403,10 +406,16 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
 	if proposalResult.Candidates == 0 && proposalResult.Source != "structured" {
 		fmt.Fprintln(stdout, "Learn stopped: no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted")
+		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+			return code
+		}
 		return 0
 	}
 	if proposalResult.Source != "structured" {
 		fmt.Fprintf(stdout, "Learn stopped: candidate source is %s; no archivist review or apply attempted\n", proposalResult.Source)
+		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+			return code
+		}
 		return 0
 	}
 
@@ -422,6 +431,9 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 	}
 	if archivistResult.Decision != "apply" {
 		fmt.Fprintf(stdout, "Learn stopped: archivist decision is %s; no apply attempted\n", archivistResult.Decision)
+		if code := cleanupDeferredIfRequested(abs, autoCleanupDeferred, stdout, stderr); code != 0 {
+			return code
+		}
 		return 0
 	}
 
@@ -460,6 +472,22 @@ func findCandidateItem(items []candidates.Item, id string) (candidates.Item, boo
 		}
 	}
 	return candidates.Item{}, false
+}
+
+func cleanupDeferredIfRequested(projectRoot string, enabled bool, stdout, stderr io.Writer) int {
+	if !enabled {
+		return 0
+	}
+	result, err := candidates.CleanupDeferred(projectRoot, candidates.CleanupOptions{})
+	if err != nil {
+		fmt.Fprintf(stderr, "learn deferred cleanup failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Deferred cleanup: %d\n", len(result.Updated))
+	for _, path := range result.Updated {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
+	return 0
 }
 
 func runPropose(args []string, stdout, stderr io.Writer) int {
