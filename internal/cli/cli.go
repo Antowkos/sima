@@ -11,6 +11,7 @@ import (
 	"github.com/antowkos/sima/internal/archivist"
 	"github.com/antowkos/sima/internal/backend"
 	"github.com/antowkos/sima/internal/brief"
+	"github.com/antowkos/sima/internal/candidates"
 	"github.com/antowkos/sima/internal/catalog"
 	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/lint"
@@ -57,6 +58,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runApply(args[2:], stdout, stderr)
 	case "archivist":
 		return runArchivist(args[2:], stdout, stderr)
+	case "candidates":
+		return runCandidates(args[2:], stdout, stderr)
 	case "memory":
 		return runCatalogCommand("memory", args[2:], stdout, stderr)
 	case "skill":
@@ -82,6 +85,7 @@ Usage:
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
   sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
+  sima candidates cleanup [--path <path>]
   sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
   sima skill list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
   sima backend list [path]
@@ -793,6 +797,43 @@ func runBackendAdd(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "Added backend %q (%s)\n", name, profile.Kind)
+	return 0
+}
+
+func runCandidates(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] != "cleanup" {
+		fmt.Fprintln(stderr, "usage: sima candidates cleanup [--path <path>]")
+		return 2
+	}
+	root := "."
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := candidates.CleanupDeferred(abs, candidates.CleanupOptions{})
+	if err != nil {
+		fmt.Fprintf(stderr, "candidate cleanup failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Cleaned candidates: %d\n", len(result.Updated))
+	for _, path := range result.Updated {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
 	return 0
 }
 

@@ -403,6 +403,33 @@ func TestLintCommand(t *testing.T) {
 	}
 }
 
+func TestCandidatesCleanupCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	candidateDir := filepath.Join(root, ".sima", "personal", "memory", "candidates")
+	candidate := "version: 1\nid: deferred\nkind: run_reflection\nscope: personal\noperation: create\nstatus: candidate\narchivist_decision: defer\nsafety:\n  decision: safe\nrun:\n  id: run\n  path: .sima/personal/runs/run\n"
+	if err := os.WriteFile(filepath.Join(candidateDir, "deferred.yaml"), []byte(candidate), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "candidates", "cleanup", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("candidates cleanup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Cleaned candidates: 1") || !strings.Contains(out.String(), ".sima/personal/memory/candidates/deferred.yaml") {
+		t.Fatalf("unexpected cleanup output: %q", out.String())
+	}
+	data, err := os.ReadFile(filepath.Join(candidateDir, "deferred.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: deferred") {
+		t.Fatalf("candidate not marked deferred:\n%s", data)
+	}
+}
+
 func TestMemoryAndSkillListCommandsShowLifecycleStatus(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
