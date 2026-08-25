@@ -96,13 +96,13 @@ The command first generates a brief, copies it into the run directory, builds a 
 
 ## One-command learn loop
 
-`sima learn --backend <name> --task <task> [--path <path>]` runs the gated personal self-improvement loop:
+`sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]` runs the gated personal self-improvement loop:
 
 ```text
-run -> propose -> archivist -> apply
+run -> propose -> clean model archivist -> apply
 ```
 
-It stops without applying when the worker run fails, proposal generation fails, safety/review gates reject the proposal, the proposal contains only a fallback review candidate, or the archivist returns `reject`/`defer`. Only an `archivist_decision: apply` proposal reaches `sima apply`; v0 auto-apply requires real structured worker `proposed_memory` / `proposed_skills`.
+If `--archivist-backend` is omitted, `learn` reuses the worker backend name for the clean archivist process. Worker and archivist still run as separate backend invocations. It stops without applying when the worker run fails, proposal generation fails, the worker proposes no structured learning, structured output is malformed, safety/review gates reject the proposal, or the archivist returns `reject`/`defer`. Only an `archivist_decision: apply` proposal reaches `sima apply`; v0 auto-apply requires real structured worker `proposed_memory` / `proposed_skills`.
 
 Backend command mapping for v0:
 
@@ -153,8 +153,8 @@ The v0 proposal is intentionally conservative:
 - it fills missing candidate evidence from the run artifact bundle;
 - it performs deterministic safety flagging for obvious reward-hacking/test-weakening language;
 - it sets `archivist_decision: defer` so a clean archivist session must review before apply;
-- it labels candidates with `candidate_source: structured` or `candidate_source: fallback`;
-- it emits a fallback review candidate only for successful, safe runs with no structured worker proposals;
+- it labels valid structured candidates with `candidate_source: structured`;
+- it does not synthesize fallback learning candidates; successful safe runs with no structured proposals remain searchable run artifacts and a zero-candidate audit proposal, but do not enter archivist/apply;
 - it persists a librarian-style `learning` classification so downstream review can distinguish active memory, reusable skills, session-only artifacts, and rejected malformed output.
 
 The persisted learning classification is intentionally small:
@@ -176,7 +176,7 @@ learning:
   notes: []
 ```
 
-This is the first smoother boundary between raw artifacts and active knowledge: fallback/no-candidate runs stay `session_only`, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary. The archivist uses this boundary: only `memory`, `skill`, and `mixed` destinations with passing quality flags can auto-apply, and similar active knowledge defers to an explicit update/supersede decision instead of creating a duplicate.
+This is the first smoother boundary between raw artifacts and active knowledge: no-candidate runs stay as raw searchable artifacts, malformed structured output becomes `reject`, memory proposals become `memory`, skill proposals become `skill`, and mixed proposals remain explicit instead of being flattened into an untyped summary. The archivist uses this boundary: only `memory`, `skill`, and `mixed` destinations with passing quality flags can auto-apply, and similar active knowledge defers to an explicit update/supersede decision instead of creating a duplicate.
 
 ## Proposal review
 
@@ -225,8 +225,8 @@ When gates pass, SIMA writes candidate memories to `.sima/personal/memory/cards/
 Decision rules:
 
 - `apply`: proposal is valid, `status: candidate`, `scope: personal`, `safety.decision: safe`, has at least one structured candidate memory/skill, `learning.destination` is `memory`, `skill`, or `mixed`, all learning quality flags pass, and no active output file conflict exists.
-- `reject`: proposal is invalid, suspicious/unsafe, has no candidates, or has `learning.destination: reject`.
-- `defer`: proposal is outside v0 auto-approval scope, contains only a fallback/session-only review candidate, fails learning quality, has a similar active memory/skill that should be handled as update/supersede, or needs manual dedup/update because an active output already exists.
+- `reject`: proposal is invalid, suspicious/unsafe, or has `learning.destination: reject`.
+- `defer`: proposal is outside v0 auto-approval scope, has no structured learning candidates, fails learning quality, has a similar active memory/skill that should be handled as update/supersede, or needs manual dedup/update because an active output already exists.
 
 The v0 dedup/lifecycle gate is conservative and deterministic. During proposal classification, a single memory candidate with the same title or trigger as an active personal memory card is classified as `operation: update` with `learning.target` pointing at that card. A single skill candidate with the same skill name or trigger as an active personal skill is likewise classified as `operation: update`. Mixed or multi-candidate proposals remain `create` and are blocked by the archivist if they collide with active knowledge, because they need a later split/review step.
 
@@ -239,7 +239,7 @@ Operation-aware apply rules:
 
 Targets must resolve under the project root. This makes lifecycle operations explicit and prevents update/supersede from relying on fuzzy dedup heuristics at mutation time. The current automatic classifier only chooses `update`; `supersede` and `deprecate` remain explicit proposal operations until SIMA has stronger stale/obsolete evidence.
 
-When the archivist defers fallback/session-only learning it marks the proposal `status: session_only`; other deferred proposals become `status: deferred`, and rejected proposals become `status: rejected`. `apply` decisions leave the proposal as `candidate` until `sima apply` performs the mutation and marks it `applied`.
+When the archivist defers no-candidate/session-only learning it marks the proposal `status: session_only`; rejected proposals become `status: rejected`. `apply` decisions leave the proposal as `candidate` until `sima apply` performs the mutation and marks it `applied`.
 
 `apply` still requires a separate `sima apply` invocation so decision and mutation stay distinct.
 
@@ -264,7 +264,7 @@ It emits structured decisions: `apply`, `reject`, or `defer`.
 
 SIMA's target architecture is Hermes-like: deterministic code owns flow, file paths, schemas, hard validation, lifecycle mutation, and retrieval filters; model backends own semantic judgment. The archivist may therefore run as a model-backed clean session via `sima archivist --proposal <id> --backend <backend>`. In that mode it must emit structured JSON with `decision`, `learning.destination`, `learning.operation`, optional explicit `learning.target`, quality flags, and notes. CLI validation remains the hard gate: unsafe proposals, invalid target paths, malformed decisions, weak quality flags, and failed deterministic review can still downgrade or reject a model `apply`.
 
-The deterministic archivist remains available when no backend is supplied, mainly as a bootstrap/safety fallback while the model-backed reviewer matures.
+The deterministic archivist remains available for explicit `sima archivist` runs when no backend is supplied, mainly as a bootstrap/safety checker while the model-backed reviewer matures. `sima learn` defaults to a model-backed clean reviewer by reusing the worker backend unless `--archivist-backend` names a separate reviewer.
 
 ## Safety
 

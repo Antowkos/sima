@@ -68,7 +68,7 @@ Usage:
   sima doctor [path]
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
-  sima learn --backend <name> --task <task> [--path <path>]
+  sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -273,6 +273,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 func runLearn(args []string, stdout, stderr io.Writer) int {
 	root := "."
 	backendName := ""
+	archivistBackendName := ""
 	task := ""
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -284,6 +285,13 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			backendName = args[i]
+		case "--archivist-backend", "--reviewer":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "%s requires a value\n", arg)
+				return 2
+			}
+			i++
+			archivistBackendName = args[i]
 		case "--task":
 			if i+1 >= len(args) {
 				fmt.Fprintln(stderr, "--task requires a value")
@@ -304,8 +312,11 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if backendName == "" || task == "" {
-		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--path <path>]")
+		fmt.Fprintln(stderr, "usage: sima learn --backend <name> --task <task> [--archivist-backend <name>] [--path <path>]")
 		return 2
+	}
+	if archivistBackendName == "" {
+		archivistBackendName = backendName
 	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -337,8 +348,17 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Candidate source: %s\n", proposalResult.Source)
 	}
 	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
+	if proposalResult.Candidates == 0 || proposalResult.Source == "" {
+		fmt.Fprintln(stdout, "Learn stopped: no structured learning candidates; no fallback proposal or archivist review attempted")
+		return 0
+	}
+	if proposalResult.Source != "structured" {
+		fmt.Fprintf(stdout, "Learn stopped: candidate source is %s; no archivist review or apply attempted\n", proposalResult.Source)
+		return 0
+	}
 
-	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID})
+	fmt.Fprintf(stdout, "Archivist backend: %s\n", archivistBackendName)
+	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID, BackendName: archivistBackendName})
 	if err != nil {
 		fmt.Fprintf(stderr, "learn archivist failed: %v\n", err)
 		return 1

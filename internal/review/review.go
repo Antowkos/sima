@@ -116,8 +116,8 @@ func validate(p proposal.Proposal) []string {
 	if len(p.Evidence) == 0 {
 		problems = append(problems, "missing evidence")
 	}
-	if p.CandidateSource != "" && !oneOf(p.CandidateSource, []string{"structured", "structured_invalid", "fallback"}) {
-		problems = append(problems, "candidate_source must be structured, structured_invalid, or fallback")
+	if p.CandidateSource != "" && !oneOf(p.CandidateSource, []string{"structured", "structured_invalid"}) {
+		problems = append(problems, "candidate_source must be structured or structured_invalid")
 	}
 	if p.Learning.Destination != "" && !oneOf(p.Learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
 		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")

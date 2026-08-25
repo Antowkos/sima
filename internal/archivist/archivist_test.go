@@ -52,7 +52,7 @@ func TestDecideRejectsSuspiciousProposal(t *testing.T) {
 	}
 }
 
-func TestDecideMarksFallbackAsSessionOnly(t *testing.T) {
+func TestDecideDefersNoStructuredLearningCandidates(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {
 		t.Fatalf("Init() error = %v", err)
@@ -60,7 +60,7 @@ func TestDecideMarksFallbackAsSessionOnly(t *testing.T) {
 	if err := config.AddBackend(root, "worker", config.BackendProfile{Kind: "codex", Executable: "/bin/echo"}, false); err != nil {
 		t.Fatalf("AddBackend() error = %v", err)
 	}
-	runResult, err := runner.Run(root, runner.Options{BackendName: "worker", Task: "fallback proposal", Now: time.Date(2026, 8, 23, 12, 30, 0, 0, time.UTC)})
+	runResult, err := runner.Run(root, runner.Options{BackendName: "worker", Task: "no learning proposal", Now: time.Date(2026, 8, 23, 12, 30, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -72,15 +72,16 @@ func TestDecideMarksFallbackAsSessionOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decide() error = %v", err)
 	}
-	if result.Decision != "defer" || !strings.Contains(strings.Join(result.Notes, "\n"), "session_only") {
+	if result.Decision != "defer" || !strings.Contains(strings.Join(result.Notes, "\n"), "no structured learning candidates") {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 	data, err := os.ReadFile(proposalResult.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "status: session_only") {
-		t.Fatalf("proposal not marked session_only:\n%s", data)
+	text := string(data)
+	if !strings.Contains(text, "status: session_only") || strings.Contains(text, "candidate_source: fallback") {
+		t.Fatalf("proposal not deferred without fallback:\n%s", data)
 	}
 }
 

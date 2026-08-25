@@ -177,14 +177,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		if len(candidateErrors) > 0 {
 			proposal.CandidateSource = "structured_invalid"
 		} else if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
-			proposal.CandidateSource = "fallback"
-			proposal.CandidateMemories = []Candidate{{
-				Type:     "workflow",
-				Title:    "Review successful SIMA run for durable lessons",
-				Trigger:  "When learning from a completed SIMA run with captured artifacts.",
-				Summary:  "The run completed successfully; inspect the bounded artifact bundle and promote only durable, evidence-backed lessons.",
-				Evidence: evidence,
-			}}
+			proposal.CandidateSource = ""
 		} else {
 			proposal.CandidateSource = "structured"
 		}
@@ -337,15 +330,14 @@ func classifyLearning(projectRoot string, p Proposal) Learning {
 		learning.Destination = "reject"
 		learning.Quality.Durable = false
 		learning.Quality.Triggerable = false
+		learning.Quality.EvidenceBacked = false
+		learning.Quality.NonTransient = false
 		learning.Quality.Reusable = false
-		learning.Notes = append(learning.Notes, "structured output is malformed or incomplete")
-		return learning
-	}
-	if p.CandidateSource == "fallback" {
-		learning.Destination = "session_only"
-		learning.Quality.Durable = false
-		learning.Quality.Reusable = false
-		learning.Notes = append(learning.Notes, "fallback candidates require human/librarian review before promotion")
+		if len(p.CandidateErrors) == 0 {
+			learning.Notes = append(learning.Notes, "structured output is malformed or incomplete")
+		} else {
+			learning.Notes = append(learning.Notes, p.CandidateErrors...)
+		}
 		return learning
 	}
 	memoryCount := len(p.CandidateMemories)

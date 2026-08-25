@@ -271,12 +271,12 @@ func TestArchivistCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("archivist code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	if !strings.Contains(out.String(), "Archivist decision: defer") || !strings.Contains(out.String(), "fallback review candidates stay session_only") {
+	if !strings.Contains(out.String(), "Archivist decision: defer") || !strings.Contains(out.String(), "proposal has no structured learning candidates") {
 		t.Fatalf("unexpected archivist output: %q", out.String())
 	}
 }
 
-func TestLearnCommandDefersFallbackCandidate(t *testing.T) {
+func TestLearnCommandStopsWhenWorkerProposesNoLearning(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {
 		t.Fatalf("Init() error = %v", initErr)
@@ -292,17 +292,20 @@ func TestLearnCommandDefersFallbackCandidate(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	for _, want := range []string{"Run ", "Proposal written:", "Archivist decision: defer", "Learn stopped:"} {
+	for _, want := range []string{"Run ", "Proposal written:", "Candidates: 0", "Learn stopped: no structured learning candidates; no fallback proposal or archivist review attempted"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("learn output missing %q: %q", want, out.String())
 		}
+	}
+	if strings.Contains(out.String(), "Archivist decision:") {
+		t.Fatalf("learn should not run archivist for no-candidate worker output: %q", out.String())
 	}
 	cards, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "cards"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cards) != 0 {
-		t.Fatalf("expected no applied cards for fallback candidate, got %d", len(cards))
+		t.Fatalf("expected no applied cards for no-candidate worker output, got %d", len(cards))
 	}
 
 	proposals, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
@@ -310,14 +313,15 @@ func TestLearnCommandDefersFallbackCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(proposals) != 1 {
-		t.Fatalf("expected one proposal, got %d", len(proposals))
+		t.Fatalf("expected one audit proposal, got %d", len(proposals))
 	}
 	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", proposals[0].Name()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "status: session_only") || !strings.Contains(string(data), "archivist_decision: defer") || !strings.Contains(string(data), "candidate_source: fallback") {
-		t.Fatalf("fallback proposal not left deferred:\n%s", data)
+	text := string(data)
+	if !strings.Contains(text, "status: candidate") || strings.Contains(text, "candidate_source: fallback") || strings.Contains(text, "Review successful SIMA run for durable lessons") {
+		t.Fatalf("proposal should not contain fallback candidate:\n%s", data)
 	}
 }
 
@@ -335,13 +339,24 @@ func TestLearnCommandAppliesStructuredCandidate(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("backend add code = %d, stderr = %s", code, stderr.String())
 	}
+	reviewer := filepath.Join(root, "reviewer.sh")
+	reviewerJSON := `{"decision":"apply","learning":{"destination":"memory","operation":"create","quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["model reviewer approved structured learning"]},"notes":["clean reviewer approved"]}`
+	if err := os.WriteFile(reviewer, []byte("#!/bin/sh\nprintf '%s\\n' '"+reviewerJSON+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	out.Reset()
 	stderr.Reset()
-	code = Run([]string{"sima", "learn", "--backend", "structured", "--task", "capture and apply structured lesson", "--path", root}, &out, &stderr)
+	code = Run([]string{"sima", "backend", "add", "reviewer", "--kind", "claude-code", "--executable", reviewer, "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("reviewer backend add code = %d, stderr = %s", code, stderr.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "learn", "--backend", "structured", "--archivist-backend", "reviewer", "--task", "capture and apply structured lesson", "--path", root}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	for _, want := range []string{"Run ", "Proposal written:", "Archivist decision: apply", "Applied proposal:", "Learn complete:"} {
+	for _, want := range []string{"Run ", "Proposal written:", "Archivist backend: reviewer", "Archivist decision: apply", "Applied proposal:", "Learn complete:"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("learn output missing %q: %q", want, out.String())
 		}

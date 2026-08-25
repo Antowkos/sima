@@ -103,10 +103,7 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 		return "reject", notes
 	}
 	if learningOperation(p) != "deprecate" && len(p.CandidateMemories)+len(p.CandidateSkills) == 0 {
-		return "reject", []string{"proposal has no candidate memories or skills"}
-	}
-	if p.CandidateSource == "fallback" {
-		return "defer", []string{"fallback review candidates stay session_only until a structured worker proposal exists"}
+		return "defer", []string{"proposal has no structured learning candidates"}
 	}
 	if decision, notes, ok := decideLearning(p); ok {
 		return decision, notes

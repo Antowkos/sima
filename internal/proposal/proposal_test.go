@@ -36,7 +36,7 @@ func TestGenerateCreatesRunProposal(t *testing.T) {
 	if result.RunID != runResult.RunID {
 		t.Fatalf("RunID = %q, want %q", result.RunID, runResult.RunID)
 	}
-	if result.Safety != "safe" || result.Decision != "defer" || result.Candidates != 1 {
+	if result.Safety != "safe" || result.Decision != "defer" || result.Candidates != 0 || result.Source != "" {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 	data, err := os.ReadFile(result.Path)
@@ -44,9 +44,14 @@ func TestGenerateCreatesRunProposal(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"kind: run_reflection", "archivist_decision: defer", "decision: safe", "destination: session_only", "fallback candidates require human/librarian review", "worker-report.yaml"} {
+	for _, want := range []string{"kind: run_reflection", "archivist_decision: defer", "decision: safe", "destination: session_only", "worker-report.yaml"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"candidate_source: fallback", "fallback candidates require human/librarian review", "Review successful SIMA run for durable lessons"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("proposal should not contain fallback artifact %q:\n%s", unwanted, text)
 		}
 	}
 }
