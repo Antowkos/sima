@@ -12,7 +12,7 @@ Review gates follow Hermes-style learning hygiene: durable memory must be compac
 
 ## Team alpha
 
-See [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
+See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
 
 ## Current slice
 

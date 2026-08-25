@@ -6,7 +6,7 @@ SIMA is moving from solo dogfood toward a small internal team alpha. The goal is
 
 Team alpha means:
 
-- technical teammates can install or build `sima` locally;
+- technical teammates can install or build `sima` locally by following [5-Minute Setup](5-minute-setup.md);
 - each pilot repo can run `sima init`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
 - at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
@@ -83,7 +83,7 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] `sima doctor` covers config, directories, auto-learning defaults, backend executables, lint, and candidate queue health;
 - [x] `sima learn` prints a concise final summary;
 - [x] `sima learn --json` emits a machine-readable summary for wrappers;
-- [ ] short 5-minute setup guide exists;
+- [x] short [5-minute setup guide](5-minute-setup.md) exists;
 - [ ] real Claude Code auto-learning dogfood completed on a small task;
 - [ ] real Codex auto-learning dogfood completed on a small task.
 
@@ -110,8 +110,7 @@ The team alpha is successful when:
 
 ## Suggested remaining implementation order
 
-1. 5-minute setup guide.
-2. Managed instructions for Claude Code / Codex.
-3. Real Claude Code auto-learning dogfood on a small task.
-4. Real Codex auto-learning dogfood on a small task.
-5. Team-scope review-required flow.
+1. Managed instructions for Claude Code / Codex.
+2. Real Claude Code auto-learning dogfood on a small task.
+3. Real Codex auto-learning dogfood on a small task.
+4. Team-scope review-required flow.
