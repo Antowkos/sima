@@ -450,6 +450,77 @@ func TestCandidatesListAndShowCommands(t *testing.T) {
 	}
 }
 
+func TestCandidatesApplyReadyApplyCommand(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	candidateDir := filepath.Join(root, ".sima", "personal", "memory", "candidates")
+	candidate := `version: 1
+id: ready
+kind: run_reflection
+scope: personal
+operation: create
+status: candidate
+archivist_decision: apply
+safety:
+  decision: safe
+learning:
+  destination: memory
+  operation: create
+  quality:
+    durable: true
+    triggerable: true
+    evidence_backed: true
+    non_transient: true
+    reusable: true
+candidate_memories:
+  - type: invariant
+    title: Bulk apply ready candidates
+    trigger: When applying multiple reviewed SIMA proposals.
+    summary: Bulk apply should mutate only proposals that already pass the apply-ready gates.
+    evidence:
+      - kind: task
+        path: .sima/personal/runs/run/task.md
+        note: original task
+run:
+  id: run
+  path: .sima/personal/runs/run
+evidence:
+  - kind: task
+    path: .sima/personal/runs/run/task.md
+    note: original task
+`
+	proposalPath := filepath.Join(candidateDir, "ready.yaml")
+	if err := os.WriteFile(proposalPath, []byte(candidate), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "candidates", "apply-ready", "--apply", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("candidates apply-ready --apply code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Applying candidates: 1", ".sima/personal/memory/candidates/ready.yaml", "applied: .sima/personal/memory/cards/ready-01-bulk-apply-ready-candidates.yaml"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("apply-ready --apply missing %q:\n%s", want, out.String())
+		}
+	}
+	proposalData, err := os.ReadFile(proposalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(proposalData), "status: applied") {
+		t.Fatalf("proposal not marked applied:\n%s", proposalData)
+	}
+	cardData, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "cards", "ready-01-bulk-apply-ready-candidates.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cardData), "status: active") || !strings.Contains(string(cardData), "title: Bulk apply ready candidates") {
+		t.Fatalf("memory card not created correctly:\n%s", cardData)
+	}
+}
+
 func TestCandidatesCleanupCommand(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

@@ -86,7 +86,7 @@ Usage:
   sima apply <proposal-id|path> [--path <path>]
   sima archivist --proposal <proposal-id|path> [--backend <backend>] [--path <path>]
   sima candidates list [--status <candidate|deferred|applied|rejected|all>] [--path <path>]
-  sima candidates apply-ready [--path <path>]
+  sima candidates apply-ready [--apply] [--path <path>]
   sima candidates show <id|path> [--path <path>]
   sima candidates cleanup [--path <path>]
   sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
@@ -806,7 +806,7 @@ func runBackendAdd(args []string, stdout, stderr io.Writer) int {
 
 func runCandidates(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: sima candidates <list|show|cleanup> [options]")
+		fmt.Fprintln(stderr, "usage: sima candidates <list|apply-ready|show|cleanup> [options]")
 		return 2
 	}
 	switch args[0] {
@@ -864,6 +864,7 @@ func runCandidatesList(args []string, stdout, stderr io.Writer) int {
 
 func runCandidatesApplyReady(args []string, stdout, stderr io.Writer) int {
 	root := "."
+	applyReady := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--path":
@@ -873,6 +874,8 @@ func runCandidatesApplyReady(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			root = args[i]
+		case "--apply":
+			applyReady = true
 		default:
 			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
 			return 2
@@ -888,7 +891,22 @@ func runCandidatesApplyReady(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "candidate apply-ready failed: %v\n", err)
 		return 1
 	}
-	printCandidateItems(stdout, items)
+	if !applyReady {
+		printCandidateItems(stdout, items)
+		return 0
+	}
+	fmt.Fprintf(stdout, "Applying candidates: %d\n", len(items))
+	for _, item := range items {
+		result, err := apply.Apply(abs, apply.Options{Target: item.Path})
+		if err != nil {
+			fmt.Fprintf(stderr, "apply-ready failed for %s: %v\n", item.Path, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "  - %s\n", result.ProposalPath)
+		for _, path := range result.Applied {
+			fmt.Fprintf(stdout, "    applied: %s\n", path)
+		}
+	}
 	return 0
 }
 
