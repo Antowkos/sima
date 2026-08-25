@@ -200,6 +200,27 @@ func TestDecideUsesModelArchivistBackend(t *testing.T) {
 	}
 }
 
+func TestDecideAllowsModelRejectWithoutLifecycleTarget(t *testing.T) {
+	root, proposalPath := createProposal(t, "model archivist reject proposal", false)
+	script := filepath.Join(root, "model-archivist-reject.sh")
+	output := `{"decision":"reject","learning":{"destination":"reject","operation":"deprecate","quality":{"durable":false,"triggerable":false,"evidence_backed":false,"non_transient":false,"reusable":false},"notes":["not evidence-backed"]},"notes":["model rejected fabricated learning"]}`
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' '"+output+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.AddBackend(root, "archivist-reject", config.BackendProfile{Kind: "claude-code", Executable: script}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+
+	result, err := Decide(root, Options{Target: proposalPath, BackendName: "archivist-reject"})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	joined := strings.Join(result.Notes, "\n")
+	if result.Decision != "reject" || strings.Contains(joined, "target.path is required") || !strings.Contains(joined, "model rejected fabricated learning") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
 func createProposal(t *testing.T, task string, suspicious bool) (string, string) {
 	t.Helper()
 	root := t.TempDir()

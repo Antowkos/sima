@@ -163,7 +163,7 @@ The persisted learning classification is intentionally small:
 learning:
   destination: memory | skill | mixed | session_only | reject
   operation: create | update | deprecate | supersede
-  target:
+  target: # required only when applying update/deprecate/supersede
     kind: memory | skill
     path: .sima/personal/memory/cards/example.yaml
     id: optional-existing-id

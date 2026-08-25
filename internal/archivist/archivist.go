@@ -132,7 +132,7 @@ func decideWithModel(projectRoot, proposalPath string, p proposal.Proposal, back
 	if decision.Learning.Destination != "" {
 		p.Learning = decision.Learning
 	}
-	if problems := validateModelLearning(p.Learning); len(problems) > 0 {
+	if problems := validateModelLearning(decision.Decision, p.Learning); len(problems) > 0 {
 		return p, "reject", append([]string{"model archivist returned invalid learning"}, problems...), nil
 	}
 	notes := append([]string{"model archivist reviewed proposal in a separate backend process"}, decision.Notes...)
@@ -146,7 +146,7 @@ func decideWithModel(projectRoot, proposalPath string, p proposal.Proposal, back
 	return p, "apply", append(notes, gateNotes...), nil
 }
 
-func validateModelLearning(learning proposal.Learning) []string {
+func validateModelLearning(decision string, learning proposal.Learning) []string {
 	var problems []string
 	if !oneOf(learning.Destination, []string{"memory", "skill", "mixed", "session_only", "reject"}) {
 		problems = append(problems, "learning.destination must be memory, skill, mixed, session_only, or reject")
@@ -154,12 +154,12 @@ func validateModelLearning(learning proposal.Learning) []string {
 	if !oneOf(learning.Operation, []string{"create", "update", "deprecate", "supersede"}) {
 		problems = append(problems, "learning.operation must be create, update, deprecate, or supersede")
 	}
-	if oneOf(learning.Operation, []string{"update", "deprecate", "supersede"}) {
+	if decision == "apply" && oneOf(learning.Operation, []string{"update", "deprecate", "supersede"}) {
 		if strings.TrimSpace(learning.Target.Path) == "" {
-			problems = append(problems, "learning.target.path is required for update, deprecate, or supersede")
+			problems = append(problems, "learning.target.path is required for apply with update, deprecate, or supersede")
 		}
 		if !oneOf(learning.Target.Kind, []string{"memory", "skill"}) {
-			problems = append(problems, "learning.target.kind must be memory or skill")
+			problems = append(problems, "learning.target.kind must be memory or skill for apply with update, deprecate, or supersede")
 		}
 	}
 	return problems
