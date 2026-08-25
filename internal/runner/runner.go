@@ -190,6 +190,18 @@ If you learned durable, triggerable lessons, include them as:
   ]
 }
 
+To deprecate stale active knowledge instead of creating new knowledge, return the same JSON shape with a learning block and no candidates:
+
+{
+  "learning": {
+    "destination": "memory|skill",
+    "operation": "deprecate",
+    "target": {"kind": "memory|skill", "path": ".sima/personal/memory/cards/example.yaml", "id": "optional-existing-id"},
+    "quality": {"durable": true, "triggerable": true, "evidence_backed": true, "non_transient": true, "reusable": true},
+    "notes": ["why this active knowledge is stale/noisy/superseded"]
+  }
+}
+
 Do not propose transient task progress, raw logs, PR/issue status, or lessons from weakened tests/bypassed validation.`, briefPath, task, contracts.Join(contracts.MemoryTypes))
 }
 

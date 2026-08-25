@@ -37,6 +37,8 @@ type WorkerReport struct {
 	StderrPath       string           `yaml:"stderr_path" json:"stderr_path,omitempty"`
 	ProposedMemory   []Candidate      `yaml:"proposed_memory,omitempty" json:"proposed_memory,omitempty"`
 	ProposedSkills   []CandidateSkill `yaml:"proposed_skills,omitempty" json:"proposed_skills,omitempty"`
+	Learning         Learning         `yaml:"learning,omitempty" json:"learning,omitempty"`
+	Result           string           `yaml:"-" json:"result,omitempty"`
 	StructuredOutput *WorkerReport    `yaml:"-" json:"structured_output,omitempty"`
 }
 
@@ -137,7 +139,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		runID = report.RunID
 	}
 
-	stdoutText := readText(filepath.Join(runDir, "stdout.log"), 4096)
+	stdoutText := readText(filepath.Join(runDir, "stdout.log"), 0)
 	stderrText := readText(filepath.Join(runDir, "stderr.log"), 4096)
 	stdoutReport, stdoutParse := parseWorkerOutput(stdoutText)
 	safety := assessSafety(stdoutText + "\n" + stderrText)
@@ -146,6 +148,7 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 	candidateMemories, candidateSkills := structuredCandidates(report, stdoutReport, evidence)
 	candidateErrors := structuredCandidateErrors(report, stdoutReport)
 	candidateErrors = append(candidateErrors, stdoutParse.Errors...)
+	explicitLearning := structuredLearning(report, stdoutReport)
 
 	proposal := Proposal{
 		Version:           1,
@@ -176,13 +179,17 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		proposal.CandidateErrors = candidateErrors
 		if len(candidateErrors) > 0 {
 			proposal.CandidateSource = "structured_invalid"
-		} else if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 {
+		} else if len(proposal.CandidateMemories)+len(proposal.CandidateSkills) == 0 && explicitLearning.Operation == "" {
 			proposal.CandidateSource = ""
 		} else {
 			proposal.CandidateSource = "structured"
 		}
 	}
 	proposal.Learning = classifyLearning(projectRoot, proposal)
+	if explicitLearning.Operation != "" || explicitLearning.Destination != "" {
+		proposal.Learning = mergeLearning(proposal.Learning, explicitLearning)
+		proposal.Operation = learningOperation(proposal)
+	}
 
 	candidateDir := filepath.Join(projectRoot, ".sima", "personal", "memory", "candidates")
 	if err := os.MkdirAll(candidateDir, 0o755); err != nil {
@@ -267,14 +274,46 @@ func parseWorkerOutput(stdoutText string) (WorkerReport, parseResult) {
 	}
 	if strings.HasPrefix(text, "{") {
 		if err := json.Unmarshal([]byte(text), &report); err == nil {
+			resultReport, resultStructured := parseEmbeddedResult(report.Result)
+			if resultStructured && (resultReport.Learning.Operation != "" || resultReport.Learning.Destination != "") {
+				return resultReport, parseResult{Structured: true}
+			}
 			if report.StructuredOutput != nil {
-				return *report.StructuredOutput, parseResult{Structured: true}
+				merged := *report.StructuredOutput
+				if resultStructured {
+					merged = mergeWorkerReport(merged, resultReport)
+				}
+				return merged, parseResult{Structured: true}
+			}
+			if resultStructured {
+				report = mergeWorkerReport(report, resultReport)
 			}
 			return report, parseResult{Structured: true}
 		}
 		return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout looks like JSON but is not valid JSON"}}
 	}
 	return WorkerReport{}, parseResult{Structured: true, Errors: []string{"worker stdout must be JSON and start with '{'"}}
+}
+
+func parseEmbeddedResult(result string) (WorkerReport, bool) {
+	text := strings.TrimSpace(result)
+	if !strings.HasPrefix(text, "{") {
+		return WorkerReport{}, false
+	}
+	var report WorkerReport
+	if err := json.Unmarshal([]byte(text), &report); err != nil {
+		return WorkerReport{}, false
+	}
+	return report, true
+}
+
+func mergeWorkerReport(base, extra WorkerReport) WorkerReport {
+	base.ProposedMemory = append(base.ProposedMemory, extra.ProposedMemory...)
+	base.ProposedSkills = append(base.ProposedSkills, extra.ProposedSkills...)
+	if extra.Learning.Operation != "" || extra.Learning.Destination != "" {
+		base.Learning = extra.Learning
+	}
+	return base
 }
 
 func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence) ([]Candidate, []CandidateSkill) {
@@ -293,6 +332,42 @@ func structuredCandidates(report, stdoutReport WorkerReport, evidence []Evidence
 		}
 	}
 	return memories, skills
+}
+
+func structuredLearning(report, stdoutReport WorkerReport) Learning {
+	if stdoutReport.Learning.Operation != "" || stdoutReport.Learning.Destination != "" {
+		return stdoutReport.Learning
+	}
+	return report.Learning
+}
+
+func mergeLearning(base, override Learning) Learning {
+	if override.Destination != "" {
+		base.Destination = override.Destination
+	}
+	if override.Operation != "" {
+		base.Operation = override.Operation
+	}
+	if override.Target.Kind != "" || override.Target.Path != "" || override.Target.ID != "" {
+		base.Target = override.Target
+	}
+	if override.Quality.Durable || override.Quality.Triggerable || override.Quality.EvidenceBacked || override.Quality.NonTransient || override.Quality.Reusable {
+		base.Quality = override.Quality
+	}
+	if len(override.Notes) > 0 {
+		base.Notes = append(base.Notes, override.Notes...)
+	}
+	return base
+}
+
+func learningOperation(p Proposal) string {
+	if p.Learning.Operation != "" {
+		return p.Learning.Operation
+	}
+	if p.Operation != "" {
+		return p.Operation
+	}
+	return "create"
 }
 
 func structuredCandidateErrors(report, stdoutReport WorkerReport) []string {
@@ -574,7 +649,7 @@ func readText(path string, limit int) string {
 	if err != nil {
 		return ""
 	}
-	if len(data) > limit {
+	if limit > 0 && len(data) > limit {
 		data = data[:limit]
 	}
 	return string(data)

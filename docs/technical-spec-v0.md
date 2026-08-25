@@ -120,6 +120,7 @@ Structured worker output contract:
 - JSON stdout must start with `{`;
 - `proposed_memory` items require `type`, `title`, `trigger`, and `summary`; `type` must be one of `decision`, `invariant`, `gotcha`, `workflow`, `guardrail`, `anti_pattern`, or `open_question`;
 - `proposed_skills` items require `name`, `trigger`, and `summary`;
+- stale active knowledge can be proposed for lifecycle cleanup with a `learning` block such as `operation: deprecate` plus explicit `target.kind/path/id`; deprecate proposals may have zero new candidates;
 - Claude JSON Schema mode uses the same strict schema as CLI validation: enums are explicit and `additionalProperties: false` rejects drift;
 - evidence may be omitted by the worker; SIMA fills candidate evidence from the bounded run bundle;
 - if there is no durable lesson, the worker should omit both proposal lists.

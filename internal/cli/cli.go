@@ -348,8 +348,8 @@ func runLearn(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Candidate source: %s\n", proposalResult.Source)
 	}
 	fmt.Fprintf(stdout, "Safety: %s\n", proposalResult.Safety)
-	if proposalResult.Candidates == 0 || proposalResult.Source == "" {
-		fmt.Fprintln(stdout, "Learn stopped: no structured learning candidates; no fallback proposal or archivist review attempted")
+	if proposalResult.Candidates == 0 && proposalResult.Source != "structured" {
+		fmt.Fprintln(stdout, "Learn stopped: no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted")
 		return 0
 	}
 	if proposalResult.Source != "structured" {

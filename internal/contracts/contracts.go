@@ -59,6 +59,37 @@ var WorkerJSONSchema = `{
         "required": ["name", "trigger", "summary"],
         "additionalProperties": false
       }
+    },
+    "learning": {
+      "type": "object",
+      "properties": {
+        "destination": {"type": "string", "enum": ` + jsonArray(LearningDestinations) + `},
+        "operation": {"type": "string", "enum": ` + jsonArray(ProposalOperations) + `},
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {"type": "string", "enum": ` + jsonArray(LearningTargetKinds) + `},
+            "path": {"type": "string"},
+            "id": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "durable": {"type": "boolean"},
+            "triggerable": {"type": "boolean"},
+            "evidence_backed": {"type": "boolean"},
+            "non_transient": {"type": "boolean"},
+            "reusable": {"type": "boolean"}
+          },
+          "required": ["durable", "triggerable", "evidence_backed", "non_transient", "reusable"],
+          "additionalProperties": false
+        },
+        "notes": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["destination", "operation", "quality"],
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

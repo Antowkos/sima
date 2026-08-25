@@ -1,6 +1,7 @@
 package proposal
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,6 +214,84 @@ func TestGenerateUsesStructuredJSONFromStdout(t *testing.T) {
 	for _, want := range []string{"JSON proposals are parsed", "destination: memory"} {
 		if !strings.Contains(string(data), want) {
 			t.Fatalf("proposal missing %q:\n%s", want, data)
+		}
+	}
+}
+
+func TestGenerateUsesStructuredLifecycleDeprecationFromStdout(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260825-020000-deprecate"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: deprecate stale memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout := `{"learning":{"destination":"memory","operation":"deprecate","target":{"kind":"memory","path":".sima/personal/memory/cards/stale.yaml","id":"stale"},"quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["stale memory no longer matches current policy"]}}`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured" || result.Candidates != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"candidate_source: structured", "operation: deprecate", "kind: memory", "path: .sima/personal/memory/cards/stale.yaml", "stale memory no longer matches current policy"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestGeneratePrefersClaudeResultLifecycleOverStructuredOutputCandidates(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	runID := "20260825-020500-wrapper-deprecate"
+	runDir := filepath.Join(root, ".sima", "personal", "runs", runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "worker-report.yaml"), []byte("run_id: "+runID+"\nstatus: success\nexit_code: 0\ntask: wrapper deprecate\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resultJSON := `{"learning":{"destination":"memory","operation":"deprecate","target":{"kind":"memory","path":".sima/personal/memory/cards/stale.yaml","id":"stale"},"quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["stale active memory should leave brief context"]}}`
+	stdout := `{"type":"result","subtype":"success","result":` + fmt.Sprintf("%q", resultJSON) + `,"structured_output":{"proposed_memory":[{"type":"decision","title":"Do not create this","trigger":"When wrapper structured_output conflicts with result lifecycle.","summary":"This candidate should be ignored when result contains an explicit lifecycle operation."}]}}`
+	if err := os.WriteFile(filepath.Join(runDir, "stdout.log"), []byte(stdout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{FromRun: runID})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Source != "structured" || result.Candidates != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, "Do not create this") {
+		t.Fatalf("structured_output candidate should not override explicit lifecycle result:\n%s", text)
+	}
+	for _, want := range []string{"operation: deprecate", "path: .sima/personal/memory/cards/stale.yaml", "stale active memory should leave brief context"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
 		}
 	}
 }

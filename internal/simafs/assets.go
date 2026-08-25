@@ -148,4 +148,6 @@ Return JSON only: no Markdown fences and no prose before or after the JSON. Use 
 ` + "```" + `
 
 If there is no durable lesson, return exactly ` + "`" + `{"status":"success"}` + "`" + `. Omit either proposal list when empty.
+
+To clean stale active knowledge, return a ` + "`" + `learning` + "`" + ` block with ` + "`" + `operation: deprecate` + "`" + `, explicit ` + "`" + `target.kind/path/id` + "`" + `, passing quality flags, and notes explaining why the item is stale. Deprecation proposals may have no new memory or skill candidates.
 `

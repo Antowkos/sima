@@ -292,7 +292,7 @@ func TestLearnCommandStopsWhenWorkerProposesNoLearning(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("learn code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
-	for _, want := range []string{"Run ", "Proposal written:", "Candidates: 0", "Learn stopped: no structured learning candidates; no fallback proposal or archivist review attempted"} {
+	for _, want := range []string{"Run ", "Proposal written:", "Candidates: 0", "Learn stopped: no structured learning candidates or lifecycle operation; no fallback proposal or archivist review attempted"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("learn output missing %q: %q", want, out.String())
 		}
