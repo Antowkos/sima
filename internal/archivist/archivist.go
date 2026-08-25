@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -205,9 +206,15 @@ func buildArchivistPrompt(projectRoot, proposalPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	var p proposal.Proposal
+	if err := yaml.Unmarshal(proposalData, &p); err != nil {
+		return "", err
+	}
+	evidencePacket := buildEvidencePacket(projectRoot, p)
+	activeKnowledge := buildActiveKnowledgePacket(projectRoot)
 	return fmt.Sprintf(`You are the SIMA clean-session archivist. You did not perform the worker task.
 
-Judge only this bounded proposal and evidence pointers. Return JSON only, no Markdown fences or prose.
+Judge only this bounded proposal, evidence packet, and active-knowledge context. Return JSON only, no Markdown fences or prose.
 
 Required JSON shape:
 {
@@ -231,7 +238,154 @@ Proposal YAML:
 ---BEGIN PROPOSAL YAML---
 %s
 ---END PROPOSAL YAML---
-`, projectRoot, rel(projectRoot, proposalPath), string(proposalData)), nil
+
+Evidence packet:
+---BEGIN EVIDENCE PACKET---
+%s
+---END EVIDENCE PACKET---
+
+Active knowledge context:
+---BEGIN ACTIVE KNOWLEDGE---
+%s
+---END ACTIVE KNOWLEDGE---
+`, projectRoot, rel(projectRoot, proposalPath), string(proposalData), evidencePacket, activeKnowledge), nil
+}
+
+func buildEvidencePacket(projectRoot string, p proposal.Proposal) string {
+	evidence := append([]proposal.Evidence{}, p.Evidence...)
+	for _, c := range p.CandidateMemories {
+		evidence = append(evidence, c.Evidence...)
+	}
+	for _, c := range p.CandidateSkills {
+		evidence = append(evidence, c.Evidence...)
+	}
+	return renderFiles(projectRoot, uniqueEvidencePaths(evidence))
+}
+
+func uniqueEvidencePaths(evidence []proposal.Evidence) []string {
+	seen := map[string]bool{}
+	var paths []string
+	for _, ev := range evidence {
+		path := strings.TrimSpace(ev.Path)
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+func buildActiveKnowledgePacket(projectRoot string) string {
+	var paths []string
+	paths = append(paths, listActiveKnowledgeFiles(filepath.Join(projectRoot, ".sima", "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"})...)
+	paths = append(paths, listActiveKnowledgeFiles(filepath.Join(projectRoot, ".sima", "personal", "skills", "active"), projectRoot, []string{".md"})...)
+	paths = append(paths, listActiveKnowledgeFiles(filepath.Join(projectRoot, ".sima", "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"})...)
+	paths = append(paths, listActiveKnowledgeFiles(filepath.Join(projectRoot, ".sima", "team", "skills", "active"), projectRoot, []string{".md"})...)
+	return renderFiles(projectRoot, paths)
+}
+
+func listActiveKnowledgeFiles(root, projectRoot string, exts []string) []string {
+	var paths []string
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !hasExt(path, exts) {
+			return nil
+		}
+		if activeKnowledgeFile(path) {
+			paths = append(paths, rel(projectRoot, path))
+		}
+		return nil
+	})
+	return paths
+}
+
+func renderFiles(projectRoot string, paths []string) string {
+	if len(paths) == 0 {
+		return "No files."
+	}
+	var b strings.Builder
+	for _, relPath := range paths {
+		absPath, ok := safeProjectPath(projectRoot, relPath)
+		if !ok {
+			fmt.Fprintf(&b, "## %s\nSkipped: outside project root.\n\n", relPath)
+			continue
+		}
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			fmt.Fprintf(&b, "## %s\nSkipped: %v\n\n", relPath, err)
+			continue
+		}
+		if !utf8.Valid(data) {
+			fmt.Fprintf(&b, "## %s\nSkipped: non-UTF-8/binary content.\n\n", relPath)
+			continue
+		}
+		fmt.Fprintf(&b, "## %s\n---BEGIN FILE---\n%s\n---END FILE---\n\n", relPath, string(data))
+	}
+	return b.String()
+}
+
+func safeProjectPath(projectRoot, relPath string) (string, bool) {
+	absPath := relPath
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(projectRoot, filepath.FromSlash(relPath))
+	}
+	absPath = filepath.Clean(absPath)
+	root := filepath.Clean(projectRoot)
+	relative, err := filepath.Rel(root, absPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || filepath.IsAbs(relative) {
+		return "", false
+	}
+	return absPath, true
+}
+
+func hasExt(path string, exts []string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	for _, candidate := range exts {
+		if ext == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func activeKnowledgeFile(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	status := statusFromContent(path, string(data))
+	return status == "" || status == "active"
+}
+
+func statusFromContent(path, content string) string {
+	if hasExt(path, []string{".yaml", ".yml"}) {
+		var meta struct {
+			Status string `yaml:"status"`
+		}
+		if err := yaml.Unmarshal([]byte(content), &meta); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(strings.ToLower(meta.Status))
+	}
+	return strings.TrimSpace(strings.ToLower(frontmatterValue(content, "status")))
+}
+
+func frontmatterValue(content, key string) string {
+	if !strings.HasPrefix(content, "---\n") {
+		return ""
+	}
+	parts := strings.SplitN(content, "\n---\n", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	prefix := key + ":"
+	for _, line := range strings.Split(parts[0], "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
 }
 
 func buildArchivistArgs(profile config.BackendProfile, prompt string) []string {

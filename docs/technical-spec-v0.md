@@ -247,16 +247,18 @@ When the archivist defers fallback/session-only learning it marks the proposal `
 
 ## Archivist contract
 
-The archivist must run in a clean separate process/session from the worker. It receives bounded evidence only:
+The archivist must run in a clean separate process/session from the worker. It receives a bounded-by-scope evidence packet, not the worker's full conversational context:
 
 - original task;
 - pre-task brief;
-- diff;
+- diff when captured;
 - logs;
 - verification results;
 - worker report;
 - proposed memory/skill changes;
-- relevant existing memory/skills.
+- relevant active memory/skills.
+
+Archivist packets include the full UTF-8 text of referenced evidence files and active knowledge files. They intentionally do not truncate by byte count or character count; file size is a poor cross-language proxy for useful evidence because encodings and languages vary. Scope/path safety is still deterministic: only project-root evidence paths are read, binary/non-UTF-8 files are skipped, and inactive knowledge (`deprecated`, `superseded`, `archived`) is excluded.
 
 It emits structured decisions: `apply`, `reject`, or `defer`.
 

@@ -221,6 +221,43 @@ func TestDecideAllowsModelRejectWithoutLifecycleTarget(t *testing.T) {
 	}
 }
 
+func TestBuildArchivistPromptIncludesFullEvidenceAndActiveKnowledge(t *testing.T) {
+	root, proposalPath := createProposal(t, "prompt packet proposal", false)
+	stdoutPath := filepath.Join(root, ".sima", "personal", "runs", "20260823-123000-worker", "stdout.log")
+	if err := os.WriteFile(stdoutPath, []byte("first evidence line\nsecond evidence line with unicode: Привет мир\nthird evidence line should not be truncated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	activeDir := filepath.Join(root, ".sima", "personal", "memory", "cards")
+	if err := os.MkdirAll(activeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(activeDir, "active.yaml"), []byte("id: active\nstatus: active\ntitle: Active packet memory\nsummary: visible active knowledge\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(activeDir, "deprecated.yaml"), []byte("id: old\nstatus: deprecated\ntitle: Deprecated packet memory\nsummary: hidden inactive knowledge\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prompt, err := buildArchivistPrompt(root, proposalPath)
+	if err != nil {
+		t.Fatalf("buildArchivistPrompt() error = %v", err)
+	}
+	for _, want := range []string{
+		"---BEGIN EVIDENCE PACKET---",
+		"second evidence line with unicode: Привет мир",
+		"third evidence line should not be truncated",
+		"---BEGIN ACTIVE KNOWLEDGE---",
+		"Active packet memory",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "Deprecated packet memory") {
+		t.Fatalf("prompt included inactive knowledge:\n%s", prompt)
+	}
+}
+
 func createProposal(t *testing.T, task string, suspicious bool) (string, string) {
 	t.Helper()
 	root := t.TempDir()
