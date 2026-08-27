@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -83,7 +84,7 @@ func printHelp(w io.Writer) {
 Usage:
   sima init [path]
   sima install [--client <claude|codex|all>] [--path <path>]
-  sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>]
+  sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>] [--claude-config-dir <path>] [--env KEY=VALUE]
   sima doctor [path]
   sima lint [path]
   sima brief <task> [--path <path>]
@@ -211,6 +212,12 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	backendExecutable := ""
 	claudeExecutable := ""
 	codexExecutable := ""
+	profileEnv := map[string]string{}
+	profileConfig := ""
+	profileEnvFile := ""
+	profileWorkingDir := ""
+	profilePermissionMode := ""
+	profileMetadata := map[string]string{}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--path":
@@ -253,8 +260,59 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			codexExecutable = args[i]
+		case "--claude-config-dir":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--claude-config-dir requires a value")
+				return 2
+			}
+			i++
+			profileEnv["CLAUDE_CONFIG_DIR"] = expandSetupHome(args[i])
+		case "--config":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--config requires a value")
+				return 2
+			}
+			i++
+			profileConfig = args[i]
+		case "--env-file":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--env-file requires a value")
+				return 2
+			}
+			i++
+			profileEnvFile = args[i]
+		case "--working-dir":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--working-dir requires a value")
+				return 2
+			}
+			i++
+			profileWorkingDir = args[i]
+		case "--permission-mode":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--permission-mode requires a value")
+				return 2
+			}
+			i++
+			profilePermissionMode = args[i]
+		case "--env":
+			if i+1 >= len(args) || !strings.Contains(args[i+1], "=") {
+				fmt.Fprintln(stderr, "--env requires KEY=VALUE")
+				return 2
+			}
+			i++
+			parts := strings.SplitN(args[i], "=", 2)
+			profileEnv[parts[0]] = parts[1]
+		case "--metadata":
+			if i+1 >= len(args) || !strings.Contains(args[i+1], "=") {
+				fmt.Fprintln(stderr, "--metadata requires KEY=VALUE")
+				return 2
+			}
+			i++
+			parts := strings.SplitN(args[i], "=", 2)
+			profileMetadata[parts[0]] = parts[1]
 		case "--help", "-h":
-			fmt.Fprintln(stdout, "usage: sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>]")
+			fmt.Fprintln(stdout, "usage: sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>] [--claude-config-dir <path>] [--env KEY=VALUE]")
 			return 0
 		default:
 			if strings.HasPrefix(args[i], "-") {
@@ -312,6 +370,14 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "backend setup failed: %v\n", err)
 		return 1
 	}
+	backendProfile = applySetupBackendProfileOptions(backendProfile, setupBackendProfileOptions{
+		ConfigPath:     profileConfig,
+		EnvFile:        profileEnvFile,
+		WorkingDir:     profileWorkingDir,
+		PermissionMode: profilePermissionMode,
+		Env:            profileEnv,
+		Metadata:       profileMetadata,
+	})
 	if selectedBackend == "none" {
 		fmt.Fprintln(stdout, "Skipped backend setup. Add one later with: sima backend add ...")
 		fmt.Fprintln(stdout, "Running lint preflight...")
@@ -342,6 +408,29 @@ type setupBackendExecutables struct {
 	Backend string
 	Claude  string
 	Codex   string
+}
+
+type setupBackendProfileOptions struct {
+	ConfigPath     string
+	EnvFile        string
+	WorkingDir     string
+	PermissionMode string
+	Env            map[string]string
+	Metadata       map[string]string
+}
+
+func applySetupBackendProfileOptions(profile config.BackendProfile, opts setupBackendProfileOptions) config.BackendProfile {
+	profile.ConfigPath = opts.ConfigPath
+	profile.EnvFile = opts.EnvFile
+	profile.WorkingDir = opts.WorkingDir
+	profile.PermissionMode = opts.PermissionMode
+	if len(opts.Env) > 0 {
+		profile.Env = opts.Env
+	}
+	if len(opts.Metadata) > 0 {
+		profile.Metadata = opts.Metadata
+	}
+	return profile
 }
 
 func selectSetupBackend(mode string, executables setupBackendExecutables) (selected string, name string, profile config.BackendProfile, err error) {
@@ -386,6 +475,15 @@ func resolveSetupExecutable(defaultName, explicit string) (string, error) {
 		return exec.LookPath(explicit)
 	}
 	return exec.LookPath(defaultName)
+}
+
+func expandSetupHome(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {

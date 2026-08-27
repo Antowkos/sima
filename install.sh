@@ -20,6 +20,9 @@ Options:
                       Claude Code executable/wrapper for optional setup
   --codex-executable PATH
                       Codex executable/wrapper for optional setup
+  --claude-config-dir DIR
+                      Set CLAUDE_CONFIG_DIR for optional Claude setup
+  --env KEY=VALUE     Extra backend environment variable for optional setup
   --help              Show this help
 
 Examples:
@@ -71,6 +74,8 @@ BACKEND="auto"
 BACKEND_EXECUTABLE=""
 CLAUDE_EXECUTABLE=""
 CODEX_EXECUTABLE=""
+CLAUDE_CONFIG_DIR=""
+SETUP_ENV_ARGS=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -113,6 +118,21 @@ while [ "$#" -gt 0 ]; do
       CODEX_EXECUTABLE="$2"
       shift 2
       ;;
+    --claude-config-dir)
+      [ "$#" -ge 2 ] || fail "--claude-config-dir requires a value"
+      CLAUDE_CONFIG_DIR="$2"
+      shift 2
+      ;;
+    --env)
+      [ "$#" -ge 2 ] || fail "--env requires KEY=VALUE"
+      case "$2" in
+        *=*) ;;
+        *) fail "--env requires KEY=VALUE" ;;
+      esac
+      SETUP_ENV_ARGS="$SETUP_ENV_ARGS
+$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -147,6 +167,9 @@ fi
 if [ -n "$CODEX_EXECUTABLE" ]; then
   CODEX_EXECUTABLE=$(resolve_invocation_command "$CODEX_EXECUTABLE")
 fi
+if [ -n "$CLAUDE_CONFIG_DIR" ]; then
+  CLAUDE_CONFIG_DIR=$(resolve_invocation_path "$CLAUDE_CONFIG_DIR")
+fi
 mkdir -p "$BIN_DIR"
 
 TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t sima-install)
@@ -180,6 +203,19 @@ if [ -n "$SETUP_DIR" ]; then
   fi
   if [ -n "$CODEX_EXECUTABLE" ]; then
     set -- "$@" --codex-executable "$CODEX_EXECUTABLE"
+  fi
+  if [ -n "$CLAUDE_CONFIG_DIR" ]; then
+    set -- "$@" --claude-config-dir "$CLAUDE_CONFIG_DIR"
+  fi
+  if [ -n "$SETUP_ENV_ARGS" ]; then
+    old_ifs=$IFS
+    IFS='
+'
+    for env_arg in $SETUP_ENV_ARGS; do
+      [ -n "$env_arg" ] || continue
+      set -- "$@" --env "$env_arg"
+    done
+    IFS=$old_ifs
   fi
   "$BIN_DIR/sima" "$@"
 else

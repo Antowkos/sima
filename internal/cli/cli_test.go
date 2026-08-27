@@ -195,13 +195,17 @@ func TestSetupCommandAutoUsesExplicitClaudeExecutable(t *testing.T) {
 	root := t.TempDir()
 	bin := t.TempDir()
 	fakeClaude := filepath.Join(bin, "custom-claude")
+	configDir := filepath.Join(root, "claude-config")
+	if err := os.Mkdir(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
 	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write fake claude: %v", err)
 	}
 	t.Setenv("PATH", "/usr/bin:/bin")
 
 	var out, stderr bytes.Buffer
-	code := Run([]string{"sima", "setup", "--path", root, "--claude-executable", fakeClaude}, &out, &stderr)
+	code := Run([]string{"sima", "setup", "--path", root, "--claude-executable", fakeClaude, "--claude-config-dir", configDir, "--env", "EXTRA_FLAG=1"}, &out, &stderr)
 	if code != 0 {
 		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
@@ -215,6 +219,9 @@ func TestSetupCommandAutoUsesExplicitClaudeExecutable(t *testing.T) {
 	}
 	if profile.Kind != "claude-code" || profile.Executable != fakeClaude {
 		t.Fatalf("unexpected profile: %#v", profile)
+	}
+	if profile.Env["CLAUDE_CONFIG_DIR"] != configDir || profile.Env["EXTRA_FLAG"] != "1" {
+		t.Fatalf("unexpected env: %#v", profile.Env)
 	}
 }
 

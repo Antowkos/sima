@@ -52,6 +52,16 @@ sima setup --backend codex --executable /path/to/codex-wrapper
 sima setup --claude-executable /path/to/claude --codex-executable /path/to/codex
 ```
 
+If one Claude Code executable uses multiple account/config directories, pass the config directory directly instead of relying on a shell alias:
+
+```bash
+sima setup --backend claude --claude-config-dir ~/.claude-work
+# equivalent low-level form:
+sima setup --backend claude --env CLAUDE_CONFIG_DIR=$HOME/.claude-work
+```
+
+Shell aliases such as `alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'` are convenient interactively, but SIMA runs backends with `exec`, so aliases are not expanded. Use `--claude-config-dir`, `--env`, or a real wrapper script path with `--executable`.
+
 For one-command onboarding from the SIMA checkout, installation can optionally call setup after the binary is installed:
 
 ```bash
