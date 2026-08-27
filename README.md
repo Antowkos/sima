@@ -58,52 +58,71 @@ sima doctor .
 sima lint .
 ```
 
-For install details, repo-URL agent bootstrap, and release process, see:
+For install details, repo-URL agent bootstrap, release process, and agent-specific usage, see:
 
 - [5-Minute Setup](docs/5-minute-setup.md)
 - [Agent Bootstrap](docs/agent-bootstrap.md)
+- [Using SIMA with Agents](docs/agent-usage.md)
 - [Release Process](docs/release-process.md)
 
-## Use as a regular user
+## Use inside agents
 
-Most users need only four commands.
+SIMA is designed to be used by agents during real work, not only by humans from a terminal.
 
-### 1. Set up SIMA in a project
+After setup:
 
 ```bash
 cd /path/to/project
 sima setup
 ```
 
-This creates `.sima/`, installs managed `CLAUDE.md` / `AGENTS.md` instructions, configures the first available Claude/Codex backend, and runs preflight checks.
+SIMA writes:
 
-### 2. Ask for a task briefing
-
-```bash
-sima brief "fix the failing auth tests" --path .
+```text
+.sima/     # project-local memory, skills, runs, evidence, config
+CLAUDE.md  # Claude Code project instructions
+AGENTS.md  # Codex/OpenAI agent project instructions
 ```
 
-The brief contains compact snippets from active project memory and skills. It does not paste raw run logs or old conversations into context.
+`CLAUDE.md` and `AGENTS.md` receive an upserted managed block:
 
-### 3. Let SIMA run a bounded learning task
-
-```bash
-sima learn --backend codex-main --task "fix the failing auth tests" --path .
+```html
+<!-- BEGIN SIMA MANAGED INSTRUCTIONS -->
+...
+<!-- END SIMA MANAGED INSTRUCTIONS -->
 ```
 
-SIMA runs the backend with a briefing, captures evidence, asks the worker for structured learning only if it discovered something durable, reviews the proposal in a clean archivist session, and applies safe personal/local memory or skills when gates pass.
+Content outside the managed block is preserved. Re-running `sima setup` or `sima install` updates the SIMA block without replacing the rest of the file.
 
-### 4. Save explicit project knowledge
+### How to prompt Claude/Codex
+
+Use a prompt like:
+
+```text
+Use SIMA for this task. Start with `sima brief`, do the normal repo workflow, verify with tests, then run `sima learn` only for durable lessons.
+
+Task: <your task>
+```
+
+Typical agent commands:
 
 ```bash
-sima remember "Use the generated client for API calls; do not hand-write endpoint strings." \
+sima brief "<task>" --path .
+# inspect repo, edit files, run tests/builds normally
+sima learn --backend <backend-name> --task "<task>" --path .
+```
+
+For explicit memory requests, agents should call:
+
+```bash
+sima remember "<durable project knowledge>" \
   --source user \
-  --type invariant \
-  --trigger "When editing API client code." \
+  --type <decision|invariant|gotcha|workflow|guardrail|anti_pattern|open_question> \
+  --trigger "When ..." \
   --path .
 ```
 
-Claude/Codex managed instructions tell agents to route “remember this” requests through `sima remember` instead of native/simple agent memory.
+Claude Code reads `CLAUDE.md`; Codex/OpenAI agents read `AGENTS.md`. See [Using SIMA with Agents](docs/agent-usage.md) for exact Claude/Codex flows, PR-review usage, backend setup, and safety rules.
 
 ## Core flow
 
