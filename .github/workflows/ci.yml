@@ -31,3 +31,12 @@ jobs:
 
       - name: Smoke version
         run: ./sima version
+
+      - name: Smoke setup, doctor, and lint
+        run: |
+          set -euo pipefail
+          project="$(mktemp -d)"
+          ./sima setup --path "$project" --backend none
+          ./sima backend add echo-safe --kind codex --executable /bin/echo --path "$project"
+          ./sima doctor "$project"
+          ./sima lint "$project"

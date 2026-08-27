@@ -46,6 +46,10 @@ It verifies:
 go test ./...
 go build -o sima ./cmd/sima
 ./sima version
+./sima setup --path "$tmp_project" --backend none
+./sima backend add echo-safe --kind codex --executable /bin/echo --path "$tmp_project"
+./sima doctor "$tmp_project"
+./sima lint "$tmp_project"
 ```
 
 ## What release does
@@ -56,7 +60,7 @@ go build -o sima ./cmd/sima
 - pushed prerelease tags matching `vMAJOR.MINOR.PATCH-PRERELEASE`;
 - manual `workflow_dispatch` for an existing semver tag.
 
-It verifies the tag format, runs tests, builds cross-platform archives, generates SHA-256 checksum files, and creates a GitHub Release.
+It verifies the tag format, runs tests, builds a tag-versioned smoke binary, checks `sima version`, runs setup/doctor/lint against a temporary project, builds cross-platform archives, generates SHA-256 checksum files, and creates a GitHub Release.
 
 Build targets:
 

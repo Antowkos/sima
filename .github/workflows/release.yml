@@ -57,6 +57,32 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Build release-test binary
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/antowkos/sima/internal/cli.Version=${VERSION}" \
+            -o sima \
+            ./cmd/sima
+
+      - name: Smoke version
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          output="$(./sima version)"
+          test "$output" = "sima ${VERSION}"
+
+      - name: Smoke setup, doctor, and lint
+        run: |
+          set -euo pipefail
+          project="$(mktemp -d)"
+          ./sima setup --path "$project" --backend none
+          ./sima backend add echo-safe --kind codex --executable /bin/echo --path "$project"
+          ./sima doctor "$project"
+          ./sima lint "$project"
+
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: [validate, test]
