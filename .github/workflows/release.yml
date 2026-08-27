@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing semver tag to release, e.g. v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve tag
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Tag must be semantic version format: vMAJOR.MINOR.PATCH[-PRERELEASE]" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test before release
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build artifact
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          name="sima_${VERSION}_${GOOS}_${GOARCH}"
+          mkdir -p "dist/$name"
+          ext=""
+          if [ "$GOOS" = "windows" ]; then
+            ext=".exe"
+          fi
+          CGO_ENABLED=0 go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/antowkos/sima/internal/cli.Version=${VERSION}" \
+            -o "dist/$name/sima${ext}" \
+            ./cmd/sima
+          cp README.md LICENSE* "dist/$name/" 2>/dev/null || true
+          if [ "$GOOS" = "windows" ]; then
+            (cd dist && zip -r "${name}.zip" "$name")
+            shasum -a 256 "dist/${name}.zip" > "dist/${name}.zip.sha256"
+          else
+            tar -C dist -czf "dist/${name}.tar.gz" "$name"
+            shasum -a 256 "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sima-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release notes
+        shell: bash
+        run: |
+          cat > RELEASE_NOTES.md <<'NOTES'
+          ## Install
+
+          Download the archive for your OS/architecture, unpack it, and put `sima` on your `PATH`.
+
+          Verify checksums with the matching `.sha256` file.
+          NOTES
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          prerelease=""
+          if printf '%s' "$TAG" | grep -q -- '-'; then
+            prerelease="--prerelease"
+          fi
+          gh release create "$TAG" dist/* \
+            --title "SIMA $TAG" \
+            --notes-file RELEASE_NOTES.md \
+            --verify-tag \
+            $prerelease

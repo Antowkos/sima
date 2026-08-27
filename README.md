@@ -24,7 +24,7 @@ sima setup
 
 Agent-assisted bootstrap from a repo URL is supported: give Claude Code/Codex the SIMA repository URL, have it clone or update a source checkout, run `./install.sh`, return to the target project, then run `sima setup` and verify with `sima doctor .`. For private repos the agent must rely on existing `gh`/git auth and must not ask the user to paste tokens into chat.
 
-See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands, [Agent Bootstrap](docs/agent-bootstrap.md) for repo-URL installation by Claude/Codex, and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
+See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands, [Agent Bootstrap](docs/agent-bootstrap.md) for repo-URL installation by Claude/Codex, [Release Process](docs/release-process.md) for semver tag-driven GitHub releases, and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
 
 ## Current slice
 
