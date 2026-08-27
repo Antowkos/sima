@@ -49,7 +49,7 @@ sima archivist --proposal <proposal-id|path> [--backend name] [--path path]
 sima memory list [--status active|deprecated|superseded|archived|all] [--path path]
 sima skill list [--status active|deprecated|superseded|archived|all] [--path path]
 sima backend list [path]
-sima backend add <name> --kind <claude-code|codex> --executable <path>
+sima backend add <name> --kind <claude-code|codex> --executable <path> [--permission-mode workspace-write]
 sima backend doctor <name> [path]
 sima version
 ```

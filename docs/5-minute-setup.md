@@ -142,10 +142,10 @@ Codex example:
 ```bash
 codex doctor
 # If auth fails, run: codex login
-sima backend add codex-main --kind codex --executable "$(command -v codex)" --path .
+sima backend add codex-main --kind codex --executable "$(command -v codex)" --permission-mode workspace-write --path .
 ```
 
-`codex doctor` should report valid auth before `sima learn`; otherwise the first real Codex run will fail with `401 Unauthorized`.
+`codex doctor` should report valid auth before `sima learn`; otherwise the first real Codex run will fail before producing worker output. `sima setup --backend codex` stores `permission_mode: workspace-write`, so SIMA invokes Codex as `codex exec --sandbox workspace-write` for editable project tasks instead of inheriting a read-only/restricted default.
 
 If you use a wrapper script, pass the wrapper path as `--executable`.
 

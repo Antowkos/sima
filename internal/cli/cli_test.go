@@ -226,7 +226,7 @@ func TestSetupCommandUsesExplicitCodexExecutable(t *testing.T) {
 	if !ok {
 		t.Fatalf("codex-main backend missing: %#v", cfg.Backends)
 	}
-	if profile.Kind != "codex" || profile.Executable != fakeCodex {
+	if profile.Kind != "codex" || profile.Executable != fakeCodex || profile.PermissionMode != "workspace-write" {
 		t.Fatalf("unexpected profile: %#v", profile)
 	}
 }

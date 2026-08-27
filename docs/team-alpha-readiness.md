@@ -97,8 +97,8 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] real Claude Code auto-learning dogfood completed on a small task;
   - result: `claude-schema` completed worker → structured proposal → clean archivist → apply-ready → auto-apply;
   - follow-up: dogfood exposed duplicate mirrored `result`/`structured_output` candidates from Claude JSON Schema output; parser now prefers validated `structured_output` unless `result` contains an explicit lifecycle operation.
-- [ ] real Codex auto-learning dogfood completed on a small task;
-  - latest attempt reached real Codex CLI `0.149.1` via `npx @openai/codex`, but stopped before worker output because `codex doctor` reported missing credentials and `sima learn` failed with `401 Unauthorized`; run `codex login` or configure a supported API key before retrying.
+- [x] real Codex auto-learning dogfood completed on a small task;
+  - result: Codex CLI `0.150.1` passed `codex doctor` after login; `sima setup --backend codex` configured `codex-main`; `sima learn --backend codex-main` edited a temp git project's README through `codex exec --sandbox workspace-write`, returned `{"status":"success"}`, produced no noisy learning candidates, cleanup deferred the session-only proposal, and `sima lint` stayed clean.
 
 ## Team memory policy for alpha
 

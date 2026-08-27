@@ -105,3 +105,17 @@ func TestBuildArgsAddsClaudeJSONSchemaMode(t *testing.T) {
 		t.Fatalf("prompt arg = %q, want do task; args=%v", args[len(args)-1], args)
 	}
 }
+
+func TestBuildArgsAddsCodexSandboxPermissionMode(t *testing.T) {
+	profile := config.BackendProfile{Kind: "codex", PermissionMode: "workspace-write"}
+	args := buildArgs(profile, "do task")
+	want := []string{"exec", "--sandbox", "workspace-write", "do task"}
+	if len(args) != len(want) {
+		t.Fatalf("args len = %d, want %d; args=%v", len(args), len(want), args)
+	}
+	for i, value := range want {
+		if args[i] != value {
+			t.Fatalf("args[%d] = %q, want %q; args=%v", i, args[i], value, args)
+		}
+	}
+}

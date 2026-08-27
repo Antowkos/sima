@@ -214,7 +214,11 @@ func buildArgs(profile config.BackendProfile, prompt string) []string {
 		}
 		return append(args, prompt)
 	case "codex":
-		return []string{"exec", prompt}
+		args := []string{"exec"}
+		if profile.PermissionMode != "" {
+			args = append(args, "--sandbox", profile.PermissionMode)
+		}
+		return append(args, prompt)
 	default:
 		return []string{prompt}
 	}

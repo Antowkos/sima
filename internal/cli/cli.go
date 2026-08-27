@@ -424,10 +424,18 @@ type setupBackendProfileOptions struct {
 }
 
 func applySetupBackendProfileOptions(profile config.BackendProfile, opts setupBackendProfileOptions) config.BackendProfile {
-	profile.ConfigPath = opts.ConfigPath
-	profile.EnvFile = opts.EnvFile
-	profile.WorkingDir = opts.WorkingDir
-	profile.PermissionMode = opts.PermissionMode
+	if opts.ConfigPath != "" {
+		profile.ConfigPath = opts.ConfigPath
+	}
+	if opts.EnvFile != "" {
+		profile.EnvFile = opts.EnvFile
+	}
+	if opts.WorkingDir != "" {
+		profile.WorkingDir = opts.WorkingDir
+	}
+	if opts.PermissionMode != "" {
+		profile.PermissionMode = opts.PermissionMode
+	}
 	if len(opts.Env) > 0 {
 		profile.Env = opts.Env
 	}
@@ -445,7 +453,7 @@ func selectSetupBackend(mode string, executables setupBackendExecutables) (selec
 			return "", "", config.BackendProfile{}, fmt.Errorf("--claude-executable %q was not found", executables.Claude)
 		}
 		if executable, lookErr := resolveSetupExecutable("codex", executables.Codex); lookErr == nil {
-			return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
+			return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable, PermissionMode: "workspace-write"}, nil
 		} else if executables.Codex != "" {
 			return "", "", config.BackendProfile{}, fmt.Errorf("--codex-executable %q was not found", executables.Codex)
 		}
@@ -471,7 +479,7 @@ func selectSetupBackend(mode string, executables setupBackendExecutables) (selec
 	if mode == "claude" {
 		return "claude", "claude-main", config.BackendProfile{Kind: "claude-code", Executable: executable}, nil
 	}
-	return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
+	return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable, PermissionMode: "workspace-write"}, nil
 }
 
 func resolveSetupExecutable(defaultName, explicit string) (string, error) {
