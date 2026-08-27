@@ -1,57 +1,177 @@
 # SIMA
 
-Self Improvement Memory Agent.
+**Self Improvement Memory Agent**
 
-SIMA is a private Go CLI for running Claude Code/Codex through a personal self-improvement loop: project-local memory, skills, evidence, clean-session archivist checks, and safe auto-application of local improvements.
+SIMA is a project-local memory and skill layer for coding agents such as Claude Code and Codex.
 
-Generated briefs include bounded snippets from active memory cards and skills, so applied lessons feed back into later runs without dumping raw artifacts into context. `sima propose` can turn structured worker JSON `proposed_memory` / `proposed_skills` output into reviewable candidates. SIMA does not synthesize fallback learning candidates; if the worker proposes no structured learning, `sima learn` stops without archivist/apply. Malformed or incomplete structured output is marked `candidate_source: structured_invalid` with `candidate_errors`, never silently converted.
+The core mental model:
 
-For Claude Code backends, set `metadata.output_format: json_schema` to run with Claude's native `--output-format json --json-schema` mode; SIMA extracts the validated `structured_output` wrapper field. Worker and archivist schema contracts live in shared code with explicit enums and `additionalProperties: false` so prompts, JSON Schema mode, and CLI validation do not drift.
-
-Review gates follow Hermes-style learning hygiene: durable memory must be compact, triggerable, evidence-backed, and not transient task progress; skills must describe reusable workflows rather than one-off run summaries. Proposals persist a small librarian classification (`destination`, `operation`, `target`, `quality`) so review can distinguish memory, skill, mixed, session-only, and rejected learning paths; workers can also emit explicit lifecycle cleanup proposals such as `operation: deprecate` with a target and no new candidates. Single-candidate collisions with active memory/skills are classified as `operation: update` with an explicit target, while ambiguous collisions are deferred for review. The target architecture is Hermes-like: deterministic code owns flow/schema/path/apply/retrieval hard gates, while model backends provide semantic candidate and archivist judgment. `sima learn` defaults to a clean model-backed archivist by reusing the worker backend for a separate reviewer invocation; `learn.auto_apply` and `learn.auto_cleanup_deferred` in `.sima/config.yaml` default to true, while CLI flags (`--auto-apply|--no-auto-apply`, `--auto-cleanup-deferred|--no-auto-cleanup-deferred`) override config per run. After an `apply` decision it re-checks the current proposal through the same apply-ready gates before mutation unless auto-apply is disabled. It prints a concise final `Learn summary:` and `--json` emits only a machine-readable summary for wrappers. `--auto-cleanup-deferred` runs post-learn maintenance that marks deferred pending proposals as `status: deferred`. `--archivist-backend` can name a distinct reviewer. `sima archivist --proposal <id> --backend <backend>` runs a clean model-backed archivist over proposal YAML, full UTF-8 evidence file contents, and active knowledge context; packets are bounded by safe project-root scope rather than byte/character truncation. CLI validation can still downgrade/reject invalid or unsafe output. `sima apply` honors lifecycle operations: `create` writes new active knowledge, `update` rewrites an explicit target, `supersede` marks a target superseded and creates replacement knowledge, and `deprecate` marks a target deprecated. `sima candidates list` and `sima candidates show` expose candidate metadata/content before mutation; `sima candidates apply-ready` filters to proposals that currently satisfy apply gates, and `--apply` bulk-applies only that filtered set; `sima candidates cleanup` marks deferred pending proposals as `status: deferred` so they leave the active review queue without applying. `sima brief` retrieves only explicit `status: active` knowledge and excludes missing/deprecated/superseded/archived items. `sima memory list` and `sima skill list` show lifecycle status across personal/team stores so auto-cleanup remains auditable. `sima doctor` runs the team-alpha preflight across project scaffold, config, auto-learning defaults, backend executables, lint, and candidate queue health. `sima lint` checks knowledge metadata, requires explicit lifecycle statuses, proposal parseability, pending candidates, and target path safety.
-
-## Team alpha
-
-Fast path from a SIMA source checkout:
-
-```bash
-./install.sh
-cd /path/to/pilot-repo
-sima setup
+```text
+work → evidence → local learning → clean archivist review → active memory/skill → better future brief
 ```
 
-`install.sh` is binary-only by default: it builds `sima` and installs it to `~/.local/bin` unless `--bin-dir` is set. Project setup is an explicit second step through `sima setup`, which defaults to the current directory, initializes project-local `.sima/` state, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks. For one-command onboarding, `./install.sh --setup /path/to/pilot-repo` is available as an opt-in convenience. Alternate agent wrappers can be passed during setup, for example `sima setup --backend claude --executable /path/to/claude-wrapper`, `sima setup --claude-config-dir ~/.claude-work`, or `sima setup --claude-executable /path/to/claude --codex-executable /path/to/codex`.
+SIMA is not a replacement for normal coding workflows. Agents still inspect repos, use `gh`, edit files, run tests, and verify work normally. SIMA adds a durable learning loop around that work so useful project knowledge survives across fresh agent sessions without dumping raw logs or chat history into context.
 
-Agent-assisted bootstrap from a repo URL is supported: give Claude Code/Codex the SIMA repository URL, have it clone or update a source checkout, run `./install.sh`, return to the target project, then run `sima setup` and verify with `sima doctor .`. For private repos the agent must rely on existing `gh`/git auth and must not ask the user to paste tokens into chat.
+## Install
 
-See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands, [Agent Bootstrap](docs/agent-bootstrap.md) for repo-URL installation by Claude/Codex, [Release Process](docs/release-process.md) for semver tag-driven GitHub releases, and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
+### From the latest GitHub Release
 
-## Current slice
+For the current private alpha repo, use authenticated GitHub CLI access:
 
 ```bash
-sima init [path]
-sima install [--client claude|codex|all] [--path path]
-sima setup [path] [--path path] [--backend auto|claude|codex|none] [--executable path] [--claude-config-dir path] [--env KEY=VALUE]
-sima doctor [path]
-sima lint [path]
-sima brief "task description" [--path path]
-sima run --backend <name> --task "task description" [--path path] [--no-propose]
-sima learn --backend <name> --task "task description" [--archivist-backend name] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path path]
-sima remember "durable project knowledge" [--source user|review|agent] [--type decision|invariant|gotcha|workflow|guardrail|anti_pattern|open_question] [--title title] [--trigger "When ..."] [--backend name] [--path path]
-sima propose --from-run <run-id|last|path> [--path path]
-sima review [--path path] [--all]
-sima candidates list [--status candidate|deferred|applied|rejected|all] [--path path]
-sima candidates apply-ready [--apply] [--path path]
-sima candidates show <id|path> [--path path]
-sima candidates cleanup [--path path]
-sima apply <proposal-id|path> [--path path]
-sima archivist --proposal <proposal-id|path> [--backend name] [--path path]
-sima memory list [--status active|deprecated|superseded|archived|all] [--path path]
-sima skill list [--status active|deprecated|superseded|archived|all] [--path path]
-sima backend list [path]
-sima backend add <name> --kind <claude-code|codex> --executable <path> [--permission-mode workspace-write]
-sima backend doctor <name> [path]
+mkdir -p /tmp/sima-install
+cd /tmp/sima-install
+
+gh release download v0.1.0-alpha.1 \
+  --repo Antowkos/sima \
+  --pattern 'sima_0.1.0-alpha.1_darwin_arm64.tar.gz'
+
+tar -xzf sima_0.1.0-alpha.1_darwin_arm64.tar.gz
+install -m 0755 sima_0.1.0-alpha.1_darwin_arm64/sima ~/.local/bin/sima
+
 sima version
 ```
 
-`sima remember` is the explicit-memory entrypoint for natural Claude/Codex sessions. Managed `CLAUDE.md`/`AGENTS.md` instructions tell agents to route user requests like “remember this” through SIMA rather than their native/simple memory. Without `--backend`, it writes a reviewable candidate and evidence file. With `--backend` or `--archivist-backend`, it runs the clean archivist/apply-ready/auto-apply flow for safe personal knowledge.
+Pick the matching archive for your platform:
+
+- `darwin_arm64`
+- `darwin_amd64`
+- `linux_arm64`
+- `linux_amd64`
+- `windows_amd64`
+
+### Build from source
+
+From a SIMA source checkout:
+
+```bash
+./install.sh
+sima version
+```
+
+Then initialize a project explicitly:
+
+```bash
+cd /path/to/project
+sima setup
+sima doctor .
+sima lint .
+```
+
+For install details, repo-URL agent bootstrap, and release process, see:
+
+- [5-Minute Setup](docs/5-minute-setup.md)
+- [Agent Bootstrap](docs/agent-bootstrap.md)
+- [Release Process](docs/release-process.md)
+
+## Use as a regular user
+
+Most users need only four commands.
+
+### 1. Set up SIMA in a project
+
+```bash
+cd /path/to/project
+sima setup
+```
+
+This creates `.sima/`, installs managed `CLAUDE.md` / `AGENTS.md` instructions, configures the first available Claude/Codex backend, and runs preflight checks.
+
+### 2. Ask for a task briefing
+
+```bash
+sima brief "fix the failing auth tests" --path .
+```
+
+The brief contains compact snippets from active project memory and skills. It does not paste raw run logs or old conversations into context.
+
+### 3. Let SIMA run a bounded learning task
+
+```bash
+sima learn --backend codex-main --task "fix the failing auth tests" --path .
+```
+
+SIMA runs the backend with a briefing, captures evidence, asks the worker for structured learning only if it discovered something durable, reviews the proposal in a clean archivist session, and applies safe personal/local memory or skills when gates pass.
+
+### 4. Save explicit project knowledge
+
+```bash
+sima remember "Use the generated client for API calls; do not hand-write endpoint strings." \
+  --source user \
+  --type invariant \
+  --trigger "When editing API client code." \
+  --path .
+```
+
+Claude/Codex managed instructions tell agents to route “remember this” requests through `sima remember` instead of native/simple agent memory.
+
+## Core flow
+
+```text
+1. User asks for work
+2. Agent/SIMA runs `sima brief`
+3. Agent does normal repo/tool workflow
+4. Agent verifies with tests/builds/checks
+5. SIMA stores run evidence
+6. Worker proposes only durable memory/skills, if any
+7. Clean archivist reviews the proposal
+8. Deterministic apply gates check safety, lifecycle, conflicts, and schema
+9. Safe personal/local knowledge becomes active
+10. Later briefs retrieve active knowledge only
+```
+
+Important rules:
+
+- personal/local learning can auto-apply after archivist + apply-ready gates;
+- transient task progress should stay in run evidence, not active memory;
+- malformed structured output becomes inspectable candidate data, not silent memory;
+- inactive/deprecated/superseded/archived knowledge stays auditable but is not injected into briefs;
+- skills are for reusable workflows, not one-off summaries.
+
+## Team flow
+
+Team knowledge should be promoted, not born shared.
+
+The intended team model is:
+
+```text
+local learn → personal active memory/skill → explicit team proposal → PR review → merge → team pull → future briefs
+```
+
+A developer or agent first proves a memory/skill locally. If it is useful beyond one person, SIMA should propose it to a shared team knowledge repository through a normal pull request. Team knowledge becomes authoritative only after review and merge.
+
+Planned commands:
+
+```bash
+sima team init --repo <git-url> --path .
+sima team pull --path .
+sima team status --path .
+sima team propose <memory-or-skill-id|path> --path .
+```
+
+Consumption comes first: `team pull` should update the local read-only mirror under `.sima/team/...`, and `sima brief` should prefer relevant active team knowledge over conflicting personal knowledge.
+
+Promotion comes second: `team propose` should create a reviewable PR containing the memory/skill, trigger, evidence, source local item, safety notes, and rationale for why it belongs in team scope.
+
+## Command reference
+
+See [Commands](docs/commands.md) for the detailed CLI reference.
+
+Common commands:
+
+```bash
+sima setup
+sima doctor .
+sima lint .
+sima brief "task" --path .
+sima learn --backend <name> --task "task" --path .
+sima remember "knowledge" --source user --type invariant --trigger "When ..." --path .
+sima candidates list --status all --path .
+sima memory list --status active --path .
+sima skill list --status active --path .
+sima backend list .
+```
+
+## Author
+
+Created by **Anton Kovalev**.

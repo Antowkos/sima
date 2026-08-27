@@ -104,10 +104,12 @@ Before inviting more than 1–2 technical teammates, complete:
 
 Team/shared knowledge is higher-impact than personal knowledge. During alpha:
 
+- knowledge and skills should be learned locally first, then explicitly promoted to team scope only when they prove reusable;
 - personal proposals auto-apply by default when they pass gates;
 - team proposals must remain review-required;
 - team candidates should include enough evidence for another teammate to audit;
 - stale or disputed team knowledge should be deprecated/superseded, not edited silently;
+- the intended team flow is `local learn → personal active → team propose PR → review/merge → team pull → brief`;
 - `sima brief` should prefer team active knowledge over personal active knowledge when both match, but this priority can be refined after pilots.
 
 ## Success criteria
