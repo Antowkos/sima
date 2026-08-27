@@ -121,8 +121,8 @@ The team alpha is successful when:
 - `sima lint` remains clean after pilot runs;
 - no secrets or transient task logs are promoted to active memory.
 
-## Suggested remaining implementation order
+## Suggested next alpha work
 
-1. Real Claude Code auto-learning dogfood on a small task.
-2. Real Codex auto-learning dogfood on a small task.
-3. Team-scope review-required flow.
+1. Run the first 1–2 teammate pilots on real repositories.
+2. Capture setup/backend/brief/proposal/archivist feedback as issues or docs changes.
+3. Implement team-scope review-required flow after personal/local alpha behavior is trusted.
