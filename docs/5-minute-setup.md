@@ -98,7 +98,24 @@ sima install --path .
 
 This creates project-local state under `.sima/` only. The SIMA source code is not vendored into the project. `sima install` upserts managed SIMA blocks into `CLAUDE.md` and `AGENTS.md` so Claude Code and Codex see the same project-memory rules.
 
-## 5. Manual backend add
+## 5. Explicit memory requests
+
+After setup, Claude Code and Codex get managed instructions telling them not to use their native/simple memory for project knowledge. If the user says "remember this" or "save this lesson", agents should route it through SIMA:
+
+```bash
+sima remember "Use WidgetKit disabled empty state instead of demo data in production widgets." \
+  --source user \
+  --type guardrail \
+  --title "Production widgets avoid demo data" \
+  --trigger "When implementing production WidgetKit fallback behavior." \
+  --path .
+```
+
+Without `--backend`, this writes a pending candidate plus evidence file and prints the next `sima archivist` command. With a configured backend, add `--backend <backend-name>` to run the clean archivist/apply-ready/auto-apply flow immediately.
+
+For review tasks, do not make the agent start with SIMA. If the user says "look at PR comments", the agent should first use its normal `gh`/repo/checks/diff flow, answer or implement the review, preserve evidence, and only then run `sima remember ... --source review --path .` if the review revealed a durable lesson.
+
+## 6. Manual backend add
 
 Choose one installed executable.
 
@@ -120,7 +137,7 @@ sima backend add codex-main --kind codex --executable "$(command -v codex)" --pa
 
 If you use a wrapper script, pass the wrapper path as `--executable`.
 
-## 6. Run preflight
+## 7. Run preflight
 
 ```bash
 sima doctor .
@@ -139,7 +156,7 @@ Expected healthy state:
 
 If `sima doctor` reports no backend, run `sima backend add ...` first. If lint reports errors, fix them before running `learn`.
 
-## 7. Create a brief for a real small task
+## 8. Create a brief for a real small task
 
 Pick a small, real task in the pilot project. Avoid secrets, credentials, and large destructive changes.
 
@@ -149,7 +166,7 @@ sima brief "small real task" --path .
 
 The brief should contain only active memory/skills and bounded source context.
 
-## 8. Run auto-learning
+## 9. Run auto-learning
 
 ```bash
 sima learn --backend <backend-name> --task "small real task" --path .
@@ -167,7 +184,7 @@ A successful run ends with a compact `Learn summary:` block. For wrappers or aut
 sima learn --backend <backend-name> --task "small real task" --json --path .
 ```
 
-## 9. Inspect what changed
+## 10. Inspect what changed
 
 ```bash
 sima candidates list --status all --path .
@@ -182,7 +199,7 @@ Useful result:
 - `sima lint .` remains clean;
 - a later `sima brief "follow-up task" --path .` includes the useful learned item.
 
-## 10. Inspect-only escape hatch
+## 11. Inspect-only escape hatch
 
 For sensitive repos or first-run demos, disable auto-apply for one run:
 

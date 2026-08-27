@@ -92,6 +92,22 @@ SIMA is the project-local self-improvement memory harness for this repository.
 - Do not weaken tests, bypass validation, hardcode outputs, hide errors, or change requirements to make the task look successful.
 - Keep raw artifacts on disk; keep durable memory compact and triggerable.
 
+## Explicit memory requests
+
+If the user asks to "remember", "save", "learn", or "record" project knowledge, route it through the SIMA harness instead of %s native memory. Do not use the agent's built-in/simple memory for project knowledge covered by SIMA.
+
+`+"```bash"+`
+sima remember "<durable project knowledge>" --source user --type <decision|invariant|gotcha|workflow|guardrail|anti_pattern|open_question> --trigger "When ..." --path .
+`+"```"+`
+
+If an archivist backend is configured and the knowledge is safe to review immediately, include `+"`"+`--backend <backend-name>`+"`"+` so SIMA can run the clean archivist/apply flow. Otherwise leave the candidate pending and tell the user the proposal path.
+
+Do not learn transient task progress, secrets, credentials, tokens, or raw chat history. If the user asks to remember a reusable procedure, prefer a SIMA skill candidate when that command exists; until then capture it as `+"`"+`--type workflow`+"`"+` or `+"`"+`--type guardrail`+"`"+` with a clear trigger.
+
+## Review / investigation workflows
+
+For normal review or investigation requests, such as "look at PR comments", first complete the normal tool workflow: use `+"`"+`gh`+"`"+`/repo inspection/checks/diff, answer or implement the review, and preserve evidence. Only after that, if a durable lesson was discovered, run `+"`"+`sima remember ... --source review --path .`+"`"+`. SIMA should learn from the completed evidence; it must not shortcut the familiar GitHub/repo workflow.
+
 ## After a successful task
 
 Run SIMA learning for the completed task:
@@ -115,5 +131,5 @@ Good memory: durable decisions, invariants, gotchas, guardrails, anti-patterns, 
 Good skills: reusable procedures with trigger, steps, pitfalls, and verification.
 
 Do not learn: transient task progress, raw run summaries, PR/issue numbers, secrets, credentials, tokens, or stale TODOs.
-`, label)
+`, label, label)
 }

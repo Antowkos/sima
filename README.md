@@ -35,6 +35,7 @@ sima lint [path]
 sima brief "task description" [--path path]
 sima run --backend <name> --task "task description" [--path path] [--no-propose]
 sima learn --backend <name> --task "task description" [--archivist-backend name] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path path]
+sima remember "durable project knowledge" [--source user|review|agent] [--type decision|invariant|gotcha|workflow|guardrail|anti_pattern|open_question] [--title title] [--trigger "When ..."] [--backend name] [--path path]
 sima propose --from-run <run-id|last|path> [--path path]
 sima review [--path path] [--all]
 sima candidates list [--status candidate|deferred|applied|rejected|all] [--path path]
@@ -50,3 +51,5 @@ sima backend add <name> --kind <claude-code|codex> --executable <path>
 sima backend doctor <name> [path]
 sima version
 ```
+
+`sima remember` is the explicit-memory entrypoint for natural Claude/Codex sessions. Managed `CLAUDE.md`/`AGENTS.md` instructions tell agents to route user requests like “remember this” through SIMA rather than their native/simple memory. Without `--backend`, it writes a reviewable candidate and evidence file. With `--backend` or `--archivist-backend`, it runs the clean archivist/apply-ready/auto-apply flow for safe personal knowledge.

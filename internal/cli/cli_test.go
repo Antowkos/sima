@@ -55,6 +55,43 @@ func TestInstallCommand(t *testing.T) {
 		if !strings.Contains(string(data), "BEGIN SIMA MANAGED INSTRUCTIONS") || !strings.Contains(string(data), "sima learn --backend <backend-name>") {
 			t.Fatalf("missing managed instructions in %s:\n%s", rel, data)
 		}
+		if !strings.Contains(string(data), "route it through the SIMA harness") || !strings.Contains(string(data), "sima remember") || !strings.Contains(string(data), "native memory") {
+			t.Fatalf("missing explicit SIMA remember instructions in %s:\n%s", rel, data)
+		}
+	}
+}
+
+func TestRememberCommandCreatesSimaHarnessCandidate(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	var out, stderr bytes.Buffer
+	knowledge := "Use WidgetKit disabled empty state instead of demo data in production widgets."
+	trigger := "When implementing production WidgetKit fallback behavior."
+	code := Run([]string{"sima", "remember", knowledge, "--path", root, "--source", "user", "--type", "guardrail", "--title", "Production widgets avoid demo data", "--trigger", trigger}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("remember code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Remember proposal written") || !strings.Contains(out.String(), "Next: sima archivist") {
+		t.Fatalf("unexpected remember output: %q", out.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".sima", "personal", "memory", "candidates"))
+	if err != nil {
+		t.Fatalf("read candidates: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one candidate, got %d", len(entries))
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".sima", "personal", "memory", "candidates", entries[0].Name()))
+	if err != nil {
+		t.Fatalf("read candidate: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{"kind: direct_knowledge", "candidate_source: structured", "type: guardrail", "title: Production widgets avoid demo data", "explicit knowledge routed through SIMA harness"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("candidate missing %q:\n%s", want, text)
+		}
 	}
 }
 

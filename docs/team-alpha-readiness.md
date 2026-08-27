@@ -10,6 +10,7 @@ Team alpha means:
 - each pilot repo can run `sima setup`, `sima init`, `sima install`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
 - at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
+- explicit user/review knowledge can be routed through `sima remember` rather than Claude/Codex native memory;
 - all memory/skill changes remain auditable via lifecycle status and candidate history;
 - team feedback is captured as issues or docs changes, not informal chat-only notes.
 
@@ -45,6 +46,7 @@ cd $PROJECT
 sima setup
 sima doctor .
 sima brief "small real task" --path .
+sima remember "durable project knowledge" --source user --type invariant --trigger "When this knowledge is relevant." --path .
 sima learn --backend <name> --task "small real task" --path .
 sima learn --backend <name> --task "small real task" --json --path .
 sima candidates list --status all --path .
@@ -71,10 +73,11 @@ For each pilot run, collect:
 2. **Backend friction** — did Claude/Codex executable/config resolution work, did Codex auth pass `codex doctor`, and did the first real `sima learn` run produce usable structured output?
 3. **Brief quality** — was retrieved memory/skill context useful or noisy?
 4. **Proposal quality** — did proposed memory/skill feel durable, triggerable, and non-transient?
-5. **Archivist quality** — did apply/defer/reject match human judgment?
-6. **Auto-learning trust** — did the auto-applied personal memory/skill feel safe and useful? What would make it trustworthy enough for regular use?
-7. **Recovery/debuggability** — could they inspect runs, candidates, evidence, and lint results?
-8. **Missing integrations** — Claude commands, Codex `AGENTS.md`, CI, GitHub issues, Slack/Telegram reporting, etc.
+5. **Explicit memory routing** — when asked to remember project knowledge, did Claude/Codex use `sima remember` instead of native/simple memory?
+6. **Archivist quality** — did apply/defer/reject match human judgment?
+7. **Auto-learning trust** — did the auto-applied personal memory/skill feel safe and useful? What would make it trustworthy enough for regular use?
+8. **Recovery/debuggability** — could they inspect runs, candidates, evidence, and lint results?
+9. **Missing integrations** — Claude commands, Codex `AGENTS.md`, CI, GitHub issues, Slack/Telegram reporting, etc.
 
 ## Alpha blockers
 

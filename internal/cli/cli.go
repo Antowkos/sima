@@ -57,6 +57,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runRun(args[2:], stdout, stderr)
 	case "learn":
 		return runLearn(args[2:], stdout, stderr)
+	case "remember":
+		return runRemember(args[2:], stdout, stderr)
 	case "propose":
 		return runPropose(args[2:], stdout, stderr)
 	case "review":
@@ -90,6 +92,7 @@ Usage:
   sima brief <task> [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
   sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path <path>]
+  sima remember <knowledge> [--source <user|review|agent>] [--type <memory-type>] [--title <title>] [--trigger <trigger>] [--backend <name>] [--path <path>]
   sima propose --from-run <run-id|last|path> [--path <path>]
   sima review [--path <path>] [--all]
   sima apply <proposal-id|path> [--path <path>]
@@ -114,6 +117,7 @@ Current v0 slice:
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
   run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
   learn    Run the full gated self-improvement loop: run, propose, archivist, apply-ready, apply
+  remember Capture explicit user/review/agent knowledge as a SIMA candidate, optionally archivist/apply it
   propose  Create a candidate proposal from a captured run bundle
   review   Validate and summarize pending candidate proposals
   candidates List, inspect, and clean candidate proposals
@@ -1029,6 +1033,192 @@ func cleanupDeferredIfRequested(projectRoot string, enabled bool, stdout, stderr
 		fmt.Fprintf(stdout, "  - %s\n", path)
 	}
 	return result.Updated, 0
+}
+
+func runRemember(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	source := "user"
+	memoryType := "invariant"
+	title := ""
+	trigger := ""
+	summaryText := ""
+	backendName := ""
+	archivistBackendName := ""
+	jsonOutput := false
+	var autoApplyOverride *bool
+	var knowledgeParts []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--source":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--source requires a value")
+				return 2
+			}
+			i++
+			source = args[i]
+		case "--type":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--type requires a value")
+				return 2
+			}
+			i++
+			memoryType = args[i]
+		case "--title":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--title requires a value")
+				return 2
+			}
+			i++
+			title = args[i]
+		case "--trigger":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--trigger requires a value")
+				return 2
+			}
+			i++
+			trigger = args[i]
+		case "--summary":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--summary requires a value")
+				return 2
+			}
+			i++
+			summaryText = args[i]
+		case "--backend":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--backend requires a value")
+				return 2
+			}
+			i++
+			backendName = args[i]
+		case "--archivist-backend", "--reviewer":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "%s requires a value\n", arg)
+				return 2
+			}
+			i++
+			archivistBackendName = args[i]
+		case "--auto-apply":
+			autoApplyOverride = boolPtr(true)
+		case "--no-auto-apply":
+			autoApplyOverride = boolPtr(false)
+		case "--json":
+			jsonOutput = true
+		case "--help", "-h":
+			fmt.Fprintln(stdout, "usage: sima remember <knowledge> [--source <user|review|agent>] [--type <memory-type>] [--title <title>] [--trigger <trigger>] [--backend <name>] [--path <path>]")
+			return 0
+		default:
+			if strings.HasPrefix(arg, "-") {
+				fmt.Fprintf(stderr, "unknown option: %s\n", arg)
+				return 2
+			}
+			knowledgeParts = append(knowledgeParts, arg)
+		}
+	}
+	knowledge := strings.TrimSpace(strings.Join(knowledgeParts, " "))
+	if knowledge == "" {
+		fmt.Fprintln(stderr, "usage: sima remember <knowledge> [--source <user|review|agent>] [--type <memory-type>] [--title <title>] [--trigger <trigger>] [--backend <name>] [--path <path>]")
+		return 2
+	}
+	humanOut := stdout
+	if jsonOutput {
+		humanOut = io.Discard
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	cfg, err := config.Load(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "remember config failed: %v\n", err)
+		return 1
+	}
+	autoApply := cfg.Learn.AutoApply
+	if autoApplyOverride != nil {
+		autoApply = *autoApplyOverride
+	}
+	result, err := proposal.Remember(abs, proposal.RememberOptions{Text: knowledge, Source: source, Type: memoryType, Title: title, Trigger: trigger, Summary: summaryText})
+	if err != nil {
+		fmt.Fprintf(stderr, "remember failed: %v\n", err)
+		return 1
+	}
+	proposalID := result.ID
+	summary := learnSummary{Status: "stopped", Outcome: "candidate_created", Task: knowledge, Backend: backendName, AutoApply: autoApply, ProposalPath: result.Path, ProposalID: proposalID, Candidates: result.Candidates, CandidateSource: result.Source, Safety: result.Safety}
+	fmt.Fprintf(humanOut, "Remember proposal written: %s\n", result.Path)
+	fmt.Fprintf(humanOut, "Candidates: %d\n", result.Candidates)
+	if backendName == "" && archivistBackendName == "" {
+		summary.StoppedReason = "candidate created; pass --backend or --archivist-backend to run clean archivist/apply flow"
+		fmt.Fprintf(humanOut, "Next: sima archivist --proposal %s --path %s\n", proposalID, abs)
+		writeLearnSummary(stdout, summary, jsonOutput)
+		return 0
+	}
+	if archivistBackendName == "" {
+		archivistBackendName = backendName
+	}
+	summary.ArchivistBackend = archivistBackendName
+	fmt.Fprintf(humanOut, "Archivist backend: %s\n", archivistBackendName)
+	archivistResult, err := archivist.Decide(abs, archivist.Options{Target: proposalID, BackendName: archivistBackendName})
+	if err != nil {
+		fmt.Fprintf(stderr, "remember archivist failed: %v\n", err)
+		return 1
+	}
+	summary.ArchivistDecision = archivistResult.Decision
+	fmt.Fprintf(humanOut, "Archivist decision: %s\n", archivistResult.Decision)
+	for _, note := range archivistResult.Notes {
+		fmt.Fprintf(humanOut, "  - %s\n", note)
+	}
+	if archivistResult.Decision != "apply" {
+		summary.Outcome = "archivist_" + archivistResult.Decision
+		summary.StoppedReason = fmt.Sprintf("archivist decision is %s; no apply attempted", archivistResult.Decision)
+		writeLearnSummary(stdout, summary, jsonOutput)
+		return 0
+	}
+	ready, err := candidates.ApplyReady(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "remember apply-ready check failed: %v\n", err)
+		return 1
+	}
+	readyItem, ok := findCandidateItem(ready, proposalID)
+	if !ok {
+		summary.Status = "failed"
+		summary.Outcome = "apply_ready_failed"
+		summary.StoppedReason = "archivist approved proposal but apply-ready gates did not pass; no apply attempted"
+		writeLearnSummary(stdout, summary, jsonOutput)
+		return 1
+	}
+	summary.ApplyReady = true
+	if !autoApply {
+		summary.Outcome = "auto_apply_disabled"
+		summary.StoppedReason = "auto_apply disabled; proposal remains pending"
+		fmt.Fprintf(humanOut, "Remember stopped: auto_apply disabled; proposal remains pending at %s\n", readyItem.Path)
+		writeLearnSummary(stdout, summary, jsonOutput)
+		return 0
+	}
+	applyResult, err := apply.Apply(abs, apply.Options{Target: readyItem.Path})
+	if err != nil {
+		fmt.Fprintf(stderr, "remember apply failed: %v\n", err)
+		return 1
+	}
+	summary.AppliedProposal = applyResult.ProposalPath
+	summary.AppliedPaths = applyResult.Applied
+	summary.Status = "completed"
+	summary.Outcome = "applied"
+	fmt.Fprintf(humanOut, "Applied proposal: %s\n", applyResult.ProposalPath)
+	for _, path := range applyResult.Applied {
+		fmt.Fprintf(humanOut, "  - %s\n", path)
+	}
+	fmt.Fprintln(humanOut, "Remember complete: explicit knowledge applied through SIMA harness")
+	writeLearnSummary(stdout, summary, jsonOutput)
+	return 0
 }
 
 func runPropose(args []string, stdout, stderr io.Writer) int {
