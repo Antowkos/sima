@@ -22,7 +22,9 @@ sima setup
 
 `install.sh` is binary-only by default: it builds `sima` and installs it to `~/.local/bin` unless `--bin-dir` is set. Project setup is an explicit second step through `sima setup`, which defaults to the current directory, initializes project-local `.sima/` state, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks. For one-command onboarding, `./install.sh --setup /path/to/pilot-repo` is available as an opt-in convenience. Alternate agent wrappers can be passed during setup, for example `sima setup --backend claude --executable /path/to/claude-wrapper`, `sima setup --claude-config-dir ~/.claude-work`, or `sima setup --claude-executable /path/to/claude --codex-executable /path/to/codex`.
 
-See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
+Agent-assisted bootstrap from a repo URL is supported: give Claude Code/Codex the SIMA repository URL, have it clone or update a source checkout, run `./install.sh`, return to the target project, then run `sima setup` and verify with `sima doctor .`. For private repos the agent must rely on existing `gh`/git auth and must not ask the user to paste tokens into chat.
+
+See [5-Minute Setup](docs/5-minute-setup.md) for first-run commands, [Agent Bootstrap](docs/agent-bootstrap.md) for repo-URL installation by Claude/Codex, and [Team Alpha Readiness](docs/team-alpha-readiness.md) for the internal pilot checklist, safety defaults, and feedback loop.
 
 ## Current slice
 

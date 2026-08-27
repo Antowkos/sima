@@ -21,6 +21,8 @@ cd $SIMA
 
 This builds the `sima` binary and installs it to `~/.local/bin` by default. It does not mutate a pilot project unless you explicitly ask for setup.
 
+If a coding agent only has the SIMA repository URL, use [Agent Bootstrap](agent-bootstrap.md). The safe pattern is still clone/update source checkout → run binary-only `./install.sh` → return to the target project → run explicit `sima setup`.
+
 Use a custom binary directory if needed:
 
 ```bash
