@@ -6,7 +6,7 @@ SIMA is moving from solo dogfood toward a small internal team alpha. The goal is
 
 Team alpha means:
 
-- technical teammates can install `sima` with a plain binary-only `./install.sh`, then explicitly choose whether to run `sima setup --path <repo>`;
+- technical teammates can install `sima` with a plain binary-only `./install.sh`, then explicitly choose whether to run `sima setup` from a pilot repo or `sima setup --path <repo>`;
 - each pilot repo can run `sima setup`, `sima init`, `sima install`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
 - at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
@@ -41,8 +41,8 @@ Recommended first-session workflow for a teammate:
 
 ```bash
 ./install.sh
-sima setup --path $PROJECT
 cd $PROJECT
+sima setup
 sima doctor .
 sima brief "small real task" --path .
 sima learn --backend <name> --task "small real task" --path .

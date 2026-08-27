@@ -83,7 +83,7 @@ func printHelp(w io.Writer) {
 Usage:
   sima init [path]
   sima install [--client <claude|codex|all>] [--path <path>]
-  sima setup [--path <path>] [--backend <auto|claude|codex|none>]
+  sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>]
   sima doctor [path]
   sima lint [path]
   sima brief <task> [--path <path>]
@@ -206,7 +206,11 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 
 func runSetup(args []string, stdout, stderr io.Writer) int {
 	root := "."
+	rootSet := false
 	backendMode := "auto"
+	backendExecutable := ""
+	claudeExecutable := ""
+	codexExecutable := ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--path":
@@ -214,8 +218,13 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 				fmt.Fprintln(stderr, "--path requires a value")
 				return 2
 			}
+			if rootSet {
+				fmt.Fprintln(stderr, "setup path specified more than once")
+				return 2
+			}
 			i++
 			root = args[i]
+			rootSet = true
 		case "--backend":
 			if i+1 >= len(args) {
 				fmt.Fprintln(stderr, "--backend requires a value")
@@ -223,13 +232,46 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			}
 			i++
 			backendMode = strings.ToLower(args[i])
+		case "--executable", "--backend-executable":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "%s requires a value\n", args[i])
+				return 2
+			}
+			i++
+			backendExecutable = args[i]
+		case "--claude-executable":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--claude-executable requires a value")
+				return 2
+			}
+			i++
+			claudeExecutable = args[i]
+		case "--codex-executable":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--codex-executable requires a value")
+				return 2
+			}
+			i++
+			codexExecutable = args[i]
 		case "--help", "-h":
-			fmt.Fprintln(stdout, "usage: sima setup [--path <path>] [--backend <auto|claude|codex|none>]")
+			fmt.Fprintln(stdout, "usage: sima setup [path] [--path <path>] [--backend <auto|claude|codex|none>] [--executable <path>] [--claude-executable <path>] [--codex-executable <path>]")
 			return 0
 		default:
-			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
-			return 2
+			if strings.HasPrefix(args[i], "-") {
+				fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+				return 2
+			}
+			if rootSet {
+				fmt.Fprintf(stderr, "unexpected extra argument: %s\n", args[i])
+				return 2
+			}
+			root = args[i]
+			rootSet = true
 		}
+	}
+	if backendExecutable != "" && backendMode == "auto" {
+		fmt.Fprintln(stderr, "--executable requires --backend claude or --backend codex; use --claude-executable/--codex-executable with --backend auto")
+		return 2
 	}
 	switch backendMode {
 	case "auto", "claude", "codex", "none":
@@ -261,7 +303,11 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "  - %s\n", path)
 	}
 
-	selectedBackend, backendName, backendProfile, err := selectSetupBackend(backendMode)
+	selectedBackend, backendName, backendProfile, err := selectSetupBackend(backendMode, setupBackendExecutables{
+		Backend: backendExecutable,
+		Claude:  claudeExecutable,
+		Codex:   codexExecutable,
+	})
 	if err != nil {
 		fmt.Fprintf(stderr, "backend setup failed: %v\n", err)
 		return 1
@@ -292,27 +338,54 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func selectSetupBackend(mode string) (selected string, name string, profile config.BackendProfile, err error) {
+type setupBackendExecutables struct {
+	Backend string
+	Claude  string
+	Codex   string
+}
+
+func selectSetupBackend(mode string, executables setupBackendExecutables) (selected string, name string, profile config.BackendProfile, err error) {
 	if mode == "auto" {
-		if executable, lookErr := exec.LookPath("claude"); lookErr == nil {
+		if executable, lookErr := resolveSetupExecutable("claude", executables.Claude); lookErr == nil {
 			return "claude", "claude-main", config.BackendProfile{Kind: "claude-code", Executable: executable}, nil
+		} else if executables.Claude != "" {
+			return "", "", config.BackendProfile{}, fmt.Errorf("--claude-executable %q was not found", executables.Claude)
 		}
-		if executable, lookErr := exec.LookPath("codex"); lookErr == nil {
+		if executable, lookErr := resolveSetupExecutable("codex", executables.Codex); lookErr == nil {
 			return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
+		} else if executables.Codex != "" {
+			return "", "", config.BackendProfile{}, fmt.Errorf("--codex-executable %q was not found", executables.Codex)
 		}
 		return "none", "", config.BackendProfile{}, nil
 	}
 	if mode == "none" {
 		return "none", "", config.BackendProfile{}, nil
 	}
-	executable, lookErr := exec.LookPath(mode)
+	explicitExecutable := executables.Backend
+	if explicitExecutable == "" && mode == "claude" {
+		explicitExecutable = executables.Claude
+	}
+	if explicitExecutable == "" && mode == "codex" {
+		explicitExecutable = executables.Codex
+	}
+	executable, lookErr := resolveSetupExecutable(mode, explicitExecutable)
 	if lookErr != nil {
+		if explicitExecutable != "" {
+			return "", "", config.BackendProfile{}, fmt.Errorf("--backend %s requested but executable %q was not found", mode, explicitExecutable)
+		}
 		return "", "", config.BackendProfile{}, fmt.Errorf("--backend %s requested but %s was not found in PATH", mode, mode)
 	}
 	if mode == "claude" {
 		return "claude", "claude-main", config.BackendProfile{Kind: "claude-code", Executable: executable}, nil
 	}
 	return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
+}
+
+func resolveSetupExecutable(defaultName, explicit string) (string, error) {
+	if explicit != "" {
+		return exec.LookPath(explicit)
+	}
+	return exec.LookPath(defaultName)
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {

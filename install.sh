@@ -12,14 +12,20 @@ through the installed Go CLI (`sima setup`) when explicitly requested.
 
 Options:
   --bin-dir DIR       Install directory for the sima binary (default: $HOME/.local/bin)
-  --setup DIR         Optionally run `sima setup --path DIR` after installing
+  --setup [DIR]       Optionally run `sima setup` after installing (default DIR: current directory)
   --project DIR       Alias for --setup DIR, kept for existing docs/scripts
   --backend MODE      Backend mode for optional setup: auto, claude, codex, none (default: auto)
+  --executable PATH   Backend executable for optional setup with --backend claude|codex
+  --claude-executable PATH
+                      Claude Code executable/wrapper for optional setup
+  --codex-executable PATH
+                      Codex executable/wrapper for optional setup
   --help              Show this help
 
 Examples:
   ./install.sh
   ./install.sh --bin-dir ~/bin
+  ./install.sh --setup
   ./install.sh --setup /path/to/project
   ./install.sh --setup . --backend none
 USAGE
@@ -42,9 +48,29 @@ expand_path() {
   esac
 }
 
+ORIGINAL_CWD=$(pwd)
+
+resolve_invocation_path() {
+  expanded=$(expand_path "$1")
+  case "$expanded" in
+    /*) printf '%s\n' "$expanded" ;;
+    *) printf '%s/%s\n' "$ORIGINAL_CWD" "$expanded" ;;
+  esac
+}
+
+resolve_invocation_command() {
+  case "$1" in
+    */*) resolve_invocation_path "$1" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 BIN_DIR="${SIMA_INSTALL_DIR:-$HOME/.local/bin}"
 SETUP_DIR=""
 BACKEND="auto"
+BACKEND_EXECUTABLE=""
+CLAUDE_EXECUTABLE=""
+CODEX_EXECUTABLE=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -53,14 +79,38 @@ while [ "$#" -gt 0 ]; do
       BIN_DIR="$2"
       shift 2
       ;;
-    --setup|--project)
-      [ "$#" -ge 2 ] || fail "$1 requires a value"
+    --setup)
+      if [ "$#" -ge 2 ] && [ "${2#-}" = "$2" ]; then
+        SETUP_DIR="$2"
+        shift 2
+      else
+        SETUP_DIR="$ORIGINAL_CWD"
+        shift 1
+      fi
+      ;;
+    --project)
+      [ "$#" -ge 2 ] || fail "--project requires a value"
       SETUP_DIR="$2"
       shift 2
       ;;
     --backend)
       [ "$#" -ge 2 ] || fail "--backend requires a value"
       BACKEND="$2"
+      shift 2
+      ;;
+    --executable|--backend-executable)
+      [ "$#" -ge 2 ] || fail "$1 requires a value"
+      BACKEND_EXECUTABLE="$2"
+      shift 2
+      ;;
+    --claude-executable)
+      [ "$#" -ge 2 ] || fail "--claude-executable requires a value"
+      CLAUDE_EXECUTABLE="$2"
+      shift 2
+      ;;
+    --codex-executable)
+      [ "$#" -ge 2 ] || fail "--codex-executable requires a value"
+      CODEX_EXECUTABLE="$2"
       shift 2
       ;;
     --help|-h)
@@ -84,7 +134,19 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
 [ -f "go.mod" ] || fail "install.sh must be run from a SIMA source checkout"
 
-BIN_DIR=$(expand_path "$BIN_DIR")
+BIN_DIR=$(resolve_invocation_path "$BIN_DIR")
+if [ -n "$SETUP_DIR" ]; then
+  SETUP_DIR=$(resolve_invocation_path "$SETUP_DIR")
+fi
+if [ -n "$BACKEND_EXECUTABLE" ]; then
+  BACKEND_EXECUTABLE=$(resolve_invocation_command "$BACKEND_EXECUTABLE")
+fi
+if [ -n "$CLAUDE_EXECUTABLE" ]; then
+  CLAUDE_EXECUTABLE=$(resolve_invocation_command "$CLAUDE_EXECUTABLE")
+fi
+if [ -n "$CODEX_EXECUTABLE" ]; then
+  CODEX_EXECUTABLE=$(resolve_invocation_command "$CODEX_EXECUTABLE")
+fi
 mkdir -p "$BIN_DIR"
 
 TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t sima-install)
@@ -108,11 +170,20 @@ if ! command -v sima >/dev/null 2>&1; then
 fi
 
 if [ -n "$SETUP_DIR" ]; then
-  SETUP_DIR=$(expand_path "$SETUP_DIR")
   log "Running optional project setup: $SETUP_DIR"
-  "$BIN_DIR/sima" setup --path "$SETUP_DIR" --backend "$BACKEND"
+  set -- setup --path "$SETUP_DIR" --backend "$BACKEND"
+  if [ -n "$BACKEND_EXECUTABLE" ]; then
+    set -- "$@" --executable "$BACKEND_EXECUTABLE"
+  fi
+  if [ -n "$CLAUDE_EXECUTABLE" ]; then
+    set -- "$@" --claude-executable "$CLAUDE_EXECUTABLE"
+  fi
+  if [ -n "$CODEX_EXECUTABLE" ]; then
+    set -- "$@" --codex-executable "$CODEX_EXECUTABLE"
+  fi
+  "$BIN_DIR/sima" "$@"
 else
-  log "Optional project setup: $BIN_DIR/sima setup --path /path/to/project"
+  log "Optional project setup: cd /path/to/project && $BIN_DIR/sima setup"
 fi
 
 log "Done."

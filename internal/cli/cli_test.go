@@ -89,6 +89,48 @@ func TestSetupCommandBackendNone(t *testing.T) {
 	}
 }
 
+func TestSetupCommandAcceptsPositionalPath(t *testing.T) {
+	root := t.TempDir()
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", root, "--backend", "none"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sima", "config.yaml")); err != nil {
+		t.Fatalf("missing config: %v", err)
+	}
+}
+
+func TestSetupCommandDefaultsToCurrentDirectory(t *testing.T) {
+	root := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", "--backend", "none"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	expectedRoot, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatalf("abs cwd: %v", err)
+	}
+	if !strings.Contains(out.String(), "Setting up SIMA project in "+expectedRoot) {
+		t.Fatalf("setup did not use current directory: %q", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sima", "config.yaml")); err != nil {
+		t.Fatalf("missing config in cwd: %v", err)
+	}
+}
+
 func TestSetupCommandAutoAddsClaudeBackend(t *testing.T) {
 	root := t.TempDir()
 	bin := t.TempDir()
@@ -105,6 +147,63 @@ func TestSetupCommandAutoAddsClaudeBackend(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Added backend: claude-main") || !strings.Contains(out.String(), "SIMA doctor") {
 		t.Fatalf("unexpected setup output: %q", out.String())
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	profile, ok := cfg.Backends["claude-main"]
+	if !ok {
+		t.Fatalf("claude-main backend missing: %#v", cfg.Backends)
+	}
+	if profile.Kind != "claude-code" || profile.Executable != fakeClaude {
+		t.Fatalf("unexpected profile: %#v", profile)
+	}
+}
+
+func TestSetupCommandUsesExplicitCodexExecutable(t *testing.T) {
+	root := t.TempDir()
+	bin := t.TempDir()
+	fakeCodex := filepath.Join(bin, "custom-codex")
+	if err := os.WriteFile(fakeCodex, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake codex: %v", err)
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", "--path", root, "--backend", "codex", "--executable", fakeCodex}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Added backend: codex-main") {
+		t.Fatalf("unexpected setup output: %q", out.String())
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	profile, ok := cfg.Backends["codex-main"]
+	if !ok {
+		t.Fatalf("codex-main backend missing: %#v", cfg.Backends)
+	}
+	if profile.Kind != "codex" || profile.Executable != fakeCodex {
+		t.Fatalf("unexpected profile: %#v", profile)
+	}
+}
+
+func TestSetupCommandAutoUsesExplicitClaudeExecutable(t *testing.T) {
+	root := t.TempDir()
+	bin := t.TempDir()
+	fakeClaude := filepath.Join(bin, "custom-claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake claude: %v", err)
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", "--path", root, "--claude-executable", fakeClaude}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
 	}
 	cfg, err := config.Load(root)
 	if err != nil {

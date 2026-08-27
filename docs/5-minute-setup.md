@@ -32,15 +32,24 @@ If the install directory is not on `PATH`, either add it or run SIMA via the pri
 ## 2. Set up a pilot project
 
 ```bash
-sima setup --path $PROJECT
+cd $PROJECT
+sima setup
 ```
 
-This initializes project-local `.sima/` state in `$PROJECT`, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks.
+This initializes project-local `.sima/` state in the current directory, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks. If you prefer not to `cd`, pass an explicit path: `sima setup --path $PROJECT`.
 
 If you want to initialize the project without adding a backend yet:
 
 ```bash
-sima setup --path $PROJECT --backend none
+sima setup --backend none
+```
+
+If you use a wrapper or alternate agent executable, pass it during setup:
+
+```bash
+sima setup --backend claude --executable /path/to/claude-wrapper
+sima setup --backend codex --executable /path/to/codex-wrapper
+sima setup --claude-executable /path/to/claude --codex-executable /path/to/codex
 ```
 
 For one-command onboarding from the SIMA checkout, installation can optionally call setup after the binary is installed:
@@ -48,6 +57,8 @@ For one-command onboarding from the SIMA checkout, installation can optionally c
 ```bash
 ./install.sh --setup $PROJECT
 ```
+
+If you invoke the installer from inside the pilot repo, for example `$SIMA/install.sh --setup`, setup uses the current directory.
 
 `./install.sh --project $PROJECT` is kept as an alias for `--setup` for existing scripts.
 
