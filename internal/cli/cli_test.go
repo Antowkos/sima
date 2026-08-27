@@ -58,6 +58,67 @@ func TestInstallCommand(t *testing.T) {
 	}
 }
 
+func TestSetupCommandBackendNone(t *testing.T) {
+	root := t.TempDir()
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", "--path", root, "--backend", "none"}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Skipped backend setup") || !strings.Contains(out.String(), "Running lint preflight") {
+		t.Fatalf("unexpected setup output: %q", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sima", "config.yaml")); err != nil {
+		t.Fatalf("missing config: %v", err)
+	}
+	for _, rel := range []string{"CLAUDE.md", "AGENTS.md"} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		if !strings.Contains(string(data), "BEGIN SIMA MANAGED INSTRUCTIONS") {
+			t.Fatalf("missing managed instructions in %s", rel)
+		}
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(cfg.Backends) != 0 {
+		t.Fatalf("expected no backends, got %#v", cfg.Backends)
+	}
+}
+
+func TestSetupCommandAutoAddsClaudeBackend(t *testing.T) {
+	root := t.TempDir()
+	bin := t.TempDir()
+	fakeClaude := filepath.Join(bin, "claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake claude: %v", err)
+	}
+	t.Setenv("PATH", bin)
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "setup", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("setup code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	if !strings.Contains(out.String(), "Added backend: claude-main") || !strings.Contains(out.String(), "SIMA doctor") {
+		t.Fatalf("unexpected setup output: %q", out.String())
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	profile, ok := cfg.Backends["claude-main"]
+	if !ok {
+		t.Fatalf("claude-main backend missing: %#v", cfg.Backends)
+	}
+	if profile.Kind != "claude-code" || profile.Executable != fakeClaude {
+		t.Fatalf("unexpected profile: %#v", profile)
+	}
+}
+
 func TestBriefCommand(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

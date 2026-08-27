@@ -6,8 +6,8 @@ SIMA is moving from solo dogfood toward a small internal team alpha. The goal is
 
 Team alpha means:
 
-- technical teammates can install `sima` and initialize a pilot repo with one command from the SIMA checkout, or follow the manual path in [5-Minute Setup](5-minute-setup.md);
-- each pilot repo can run `sima init`, `sima install`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
+- technical teammates can install `sima` with a plain binary-only `./install.sh`, then explicitly choose whether to run `sima setup --path <repo>`;
+- each pilot repo can run `sima setup`, `sima init`, `sima install`, `sima doctor`, `sima lint`, and `sima brief` without manual explanation;
 - at least one real Claude Code or Codex backend executable is configured and visible in `sima doctor`;
 - `sima learn` runs in self-improving mode by default for personal/local learning, with inspect-only available as an override;
 - all memory/skill changes remain auditable via lifecycle status and candidate history;
@@ -40,7 +40,8 @@ Rationale:
 Recommended first-session workflow for a teammate:
 
 ```bash
-./install.sh --project $PROJECT
+./install.sh
+sima setup --path $PROJECT
 cd $PROJECT
 sima doctor .
 sima brief "small real task" --path .
@@ -84,7 +85,8 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] `sima learn` prints a concise final summary;
 - [x] `sima learn --json` emits a machine-readable summary for wrappers;
 - [x] `sima install` writes managed Claude Code/Codex project instructions;
-- [x] `install.sh` builds/installs the binary and can initialize a pilot repo with managed instructions plus backend/preflight setup;
+- [x] `sima setup` initializes a pilot repo with managed instructions plus backend/preflight setup;
+- [x] `install.sh` is binary-only by default and offers setup as an explicit opt-in (`--setup` / legacy `--project`);
 - [x] short [5-minute setup guide](5-minute-setup.md) exists;
 - [x] real Claude Code auto-learning dogfood completed on a small task;
   - result: `claude-schema` completed worker → structured proposal → clean archivist → apply-ready → auto-apply;

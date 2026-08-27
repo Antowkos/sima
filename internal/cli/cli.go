@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -41,6 +42,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runInit(args[2:], stdout, stderr)
 	case "install":
 		return runInstall(args[2:], stdout, stderr)
+	case "setup":
+		return runSetup(args[2:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[2:], stdout, stderr)
 	case "lint":
@@ -80,6 +83,7 @@ func printHelp(w io.Writer) {
 Usage:
   sima init [path]
   sima install [--client <claude|codex|all>] [--path <path>]
+  sima setup [--path <path>] [--backend <auto|claude|codex|none>]
   sima doctor [path]
   sima lint [path]
   sima brief <task> [--path <path>]
@@ -103,6 +107,7 @@ Usage:
 Current v0 slice:
   init     Create project-local .sima scaffold
   install  Upsert managed Claude Code/Codex project instruction blocks
+  setup    Initialize project state, install instructions, optionally add backend, and run preflight
   doctor   Check SIMA project state and local runtime prerequisites
   lint     Check SIMA knowledge lifecycle metadata, candidates, and target paths
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
@@ -197,6 +202,117 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "  - %s\n", path)
 	}
 	return 0
+}
+
+func runSetup(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	backendMode := "auto"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--backend":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--backend requires a value")
+				return 2
+			}
+			i++
+			backendMode = strings.ToLower(args[i])
+		case "--help", "-h":
+			fmt.Fprintln(stdout, "usage: sima setup [--path <path>] [--backend <auto|claude|codex|none>]")
+			return 0
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	switch backendMode {
+	case "auto", "claude", "codex", "none":
+	default:
+		fmt.Fprintf(stderr, "unknown backend mode: %s\n", backendMode)
+		return 2
+	}
+
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "Setting up SIMA project in %s\n", abs)
+	if _, err := simafs.Init(abs); err != nil {
+		fmt.Fprintf(stderr, "init failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "Initialized project state")
+
+	result, err := simafs.InstallInstructions(abs, simafs.InstallOptions{})
+	if err != nil {
+		fmt.Fprintf(stderr, "install instructions failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "Installed managed instructions")
+	for _, path := range result.Written {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
+
+	selectedBackend, backendName, backendProfile, err := selectSetupBackend(backendMode)
+	if err != nil {
+		fmt.Fprintf(stderr, "backend setup failed: %v\n", err)
+		return 1
+	}
+	if selectedBackend == "none" {
+		fmt.Fprintln(stdout, "Skipped backend setup. Add one later with: sima backend add ...")
+		fmt.Fprintln(stdout, "Running lint preflight...")
+		if runLint([]string{abs}, stdout, stderr) != 0 {
+			return 1
+		}
+		fmt.Fprintln(stdout, "Skipped sima doctor because no backend is configured yet. Run it after sima backend add.")
+	} else {
+		if err := config.AddBackend(abs, backendName, backendProfile, true); err != nil {
+			fmt.Fprintf(stderr, "add backend: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Added backend: %s\n", backendName)
+		if selectedBackend == "codex" {
+			fmt.Fprintln(stdout, "Before the first Codex learn run, check auth with: codex doctor")
+		}
+		fmt.Fprintln(stdout, "Running preflight...")
+		if runDoctor([]string{abs}, stdout, stderr) != 0 {
+			return 1
+		}
+	}
+
+	fmt.Fprintf(stdout, "Next: sima brief \"small real task\" --path %s\n", abs)
+	return 0
+}
+
+func selectSetupBackend(mode string) (selected string, name string, profile config.BackendProfile, err error) {
+	if mode == "auto" {
+		if executable, lookErr := exec.LookPath("claude"); lookErr == nil {
+			return "claude", "claude-main", config.BackendProfile{Kind: "claude-code", Executable: executable}, nil
+		}
+		if executable, lookErr := exec.LookPath("codex"); lookErr == nil {
+			return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
+		}
+		return "none", "", config.BackendProfile{}, nil
+	}
+	if mode == "none" {
+		return "none", "", config.BackendProfile{}, nil
+	}
+	executable, lookErr := exec.LookPath(mode)
+	if lookErr != nil {
+		return "", "", config.BackendProfile{}, fmt.Errorf("--backend %s requested but %s was not found in PATH", mode, mode)
+	}
+	if mode == "claude" {
+		return "claude", "claude-main", config.BackendProfile{Kind: "claude-code", Executable: executable}, nil
+	}
+	return "codex", "codex-main", config.BackendProfile{Kind: "codex", Executable: executable}, nil
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {

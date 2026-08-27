@@ -10,30 +10,48 @@ Use this guide to run the first team-alpha SIMA loop in an existing project. The
 
 Examples below use `$PROJECT` for the pilot repository and `$SIMA` for the SIMA source checkout.
 
-## 1. Fast path
+## 1. Install the binary
 
 From the SIMA source checkout:
 
 ```bash
 cd $SIMA
-./install.sh --project $PROJECT
+./install.sh
 ```
 
-This builds the `sima` binary, installs it to `~/.local/bin` by default, initializes project-local `.sima/` state in `$PROJECT`, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks.
+This builds the `sima` binary and installs it to `~/.local/bin` by default. It does not mutate a pilot project unless you explicitly ask for setup.
 
 Use a custom binary directory if needed:
 
 ```bash
-./install.sh --bin-dir ~/bin --project $PROJECT
+./install.sh --bin-dir ~/bin
 ```
+
+If the install directory is not on `PATH`, either add it or run SIMA via the printed binary path, for example `~/.local/bin/sima`.
+
+## 2. Set up a pilot project
+
+```bash
+sima setup --path $PROJECT
+```
+
+This initializes project-local `.sima/` state in `$PROJECT`, upserts managed `CLAUDE.md`/`AGENTS.md` instructions, auto-adds the first available Claude/Codex backend, and runs preflight checks.
 
 If you want to initialize the project without adding a backend yet:
 
 ```bash
-./install.sh --project $PROJECT --backend none
+sima setup --path $PROJECT --backend none
 ```
 
-## 2. Manual build path
+For one-command onboarding from the SIMA checkout, installation can optionally call setup after the binary is installed:
+
+```bash
+./install.sh --setup $PROJECT
+```
+
+`./install.sh --project $PROJECT` is kept as an alias for `--setup` for existing scripts.
+
+## 3. Manual build path
 
 ```bash
 cd $SIMA
@@ -49,7 +67,7 @@ cp ./sima ~/bin/sima
 
 If you do not copy it into `PATH`, run SIMA via the built binary path, for example `$SIMA/sima`.
 
-## 3. Initialize SIMA in a pilot project
+## 4. Manual project initialization
 
 ```bash
 cd $PROJECT
@@ -59,7 +77,7 @@ sima install --path .
 
 This creates project-local state under `.sima/` only. The SIMA source code is not vendored into the project. `sima install` upserts managed SIMA blocks into `CLAUDE.md` and `AGENTS.md` so Claude Code and Codex see the same project-memory rules.
 
-## 4. Add one backend
+## 5. Manual backend add
 
 Choose one installed executable.
 
@@ -81,7 +99,7 @@ sima backend add codex-main --kind codex --executable "$(command -v codex)" --pa
 
 If you use a wrapper script, pass the wrapper path as `--executable`.
 
-## 5. Run preflight
+## 6. Run preflight
 
 ```bash
 sima doctor .
@@ -100,7 +118,7 @@ Expected healthy state:
 
 If `sima doctor` reports no backend, run `sima backend add ...` first. If lint reports errors, fix them before running `learn`.
 
-## 6. Create a brief for a real small task
+## 7. Create a brief for a real small task
 
 Pick a small, real task in the pilot project. Avoid secrets, credentials, and large destructive changes.
 
@@ -110,7 +128,7 @@ sima brief "small real task" --path .
 
 The brief should contain only active memory/skills and bounded source context.
 
-## 7. Run auto-learning
+## 8. Run auto-learning
 
 ```bash
 sima learn --backend <backend-name> --task "small real task" --path .
@@ -128,7 +146,7 @@ A successful run ends with a compact `Learn summary:` block. For wrappers or aut
 sima learn --backend <backend-name> --task "small real task" --json --path .
 ```
 
-## 8. Inspect what changed
+## 9. Inspect what changed
 
 ```bash
 sima candidates list --status all --path .
@@ -143,7 +161,7 @@ Useful result:
 - `sima lint .` remains clean;
 - a later `sima brief "follow-up task" --path .` includes the useful learned item.
 
-## 9. Inspect-only escape hatch
+## 10. Inspect-only escape hatch
 
 For sensitive repos or first-run demos, disable auto-apply for one run:
 

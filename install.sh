@@ -7,19 +7,21 @@ Usage: ./install.sh [options]
 
 Build and install the sima CLI from this source checkout.
 
+Installation is binary-only by default. Project setup is optional and runs
+through the installed Go CLI (`sima setup`) when explicitly requested.
+
 Options:
   --bin-dir DIR       Install directory for the sima binary (default: $HOME/.local/bin)
-  --project DIR       Also initialize SIMA in a project and install managed agent instructions
-  --backend auto      Add the first available backend: claude, then codex (default with --project)
-  --backend claude    Add a Claude Code backend if `claude` is available
-  --backend codex     Add a Codex backend if `codex` is available
-  --backend none      Do not add an agent backend
+  --setup DIR         Optionally run `sima setup --path DIR` after installing
+  --project DIR       Alias for --setup DIR, kept for existing docs/scripts
+  --backend MODE      Backend mode for optional setup: auto, claude, codex, none (default: auto)
   --help              Show this help
 
 Examples:
   ./install.sh
-  ./install.sh --project /path/to/project
-  ./install.sh --bin-dir ~/bin --project . --backend claude
+  ./install.sh --bin-dir ~/bin
+  ./install.sh --setup /path/to/project
+  ./install.sh --setup . --backend none
 USAGE
 }
 
@@ -41,9 +43,8 @@ expand_path() {
 }
 
 BIN_DIR="${SIMA_INSTALL_DIR:-$HOME/.local/bin}"
-PROJECT_DIR=""
+SETUP_DIR=""
 BACKEND="auto"
-BACKEND_EXPLICIT="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -52,15 +53,14 @@ while [ "$#" -gt 0 ]; do
       BIN_DIR="$2"
       shift 2
       ;;
-    --project)
-      [ "$#" -ge 2 ] || fail "--project requires a value"
-      PROJECT_DIR="$2"
+    --setup|--project)
+      [ "$#" -ge 2 ] || fail "$1 requires a value"
+      SETUP_DIR="$2"
       shift 2
       ;;
     --backend)
       [ "$#" -ge 2 ] || fail "--backend requires a value"
       BACKEND="$2"
-      BACKEND_EXPLICIT="true"
       shift 2
       ;;
     --help|-h)
@@ -107,63 +107,13 @@ if ! command -v sima >/dev/null 2>&1; then
   esac
 fi
 
-if [ -n "$PROJECT_DIR" ]; then
-  PROJECT_DIR=$(expand_path "$PROJECT_DIR")
-  mkdir -p "$PROJECT_DIR"
-  log "Initializing SIMA project state in: $PROJECT_DIR"
-  "$BIN_DIR/sima" init "$PROJECT_DIR"
-  "$BIN_DIR/sima" install --path "$PROJECT_DIR"
-
-  if [ "$BACKEND" = "auto" ]; then
-    if command -v claude >/dev/null 2>&1; then
-      BACKEND="claude"
-    elif command -v codex >/dev/null 2>&1; then
-      BACKEND="codex"
-    else
-      BACKEND="none"
-    fi
-  fi
-
-  case "$BACKEND" in
-    claude)
-      if command -v claude >/dev/null 2>&1; then
-        "$BIN_DIR/sima" backend add claude-main --kind claude-code --executable "$(command -v claude)" --path "$PROJECT_DIR" --force
-        log "Added backend: claude-main"
-      elif [ "$BACKEND_EXPLICIT" = "true" ]; then
-        fail "--backend claude requested but claude was not found in PATH"
-      else
-        log "Skipped Claude backend: claude not found in PATH"
-      fi
-      ;;
-    codex)
-      if command -v codex >/dev/null 2>&1; then
-        "$BIN_DIR/sima" backend add codex-main --kind codex --executable "$(command -v codex)" --path "$PROJECT_DIR" --force
-        log "Added backend: codex-main"
-        log "Before the first Codex learn run, check auth with: codex doctor"
-      elif [ "$BACKEND_EXPLICIT" = "true" ]; then
-        fail "--backend codex requested but codex was not found in PATH"
-      else
-        log "Skipped Codex backend: codex not found in PATH"
-      fi
-      ;;
-    none)
-      log "Skipped backend setup. Add one later with: sima backend add ..."
-      ;;
-  esac
-
-  if [ "$BACKEND" = "none" ]; then
-    log "Running lint preflight..."
-    "$BIN_DIR/sima" lint "$PROJECT_DIR"
-    log "Skipped sima doctor because no backend is configured yet. Run it after sima backend add."
-  else
-    log "Running preflight..."
-    "$BIN_DIR/sima" doctor "$PROJECT_DIR"
-    "$BIN_DIR/sima" lint "$PROJECT_DIR"
-  fi
+if [ -n "$SETUP_DIR" ]; then
+  SETUP_DIR=$(expand_path "$SETUP_DIR")
+  log "Running optional project setup: $SETUP_DIR"
+  "$BIN_DIR/sima" setup --path "$SETUP_DIR" --backend "$BACKEND"
+else
+  log "Optional project setup: $BIN_DIR/sima setup --path /path/to/project"
 fi
 
 log "Done."
 log "Try: $BIN_DIR/sima version"
-if [ -n "$PROJECT_DIR" ]; then
-  log "Next: $BIN_DIR/sima brief \"small real task\" --path $PROJECT_DIR"
-fi
