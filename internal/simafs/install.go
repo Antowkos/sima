@@ -108,6 +108,16 @@ Do not learn transient task progress, secrets, credentials, tokens, or raw chat 
 
 For normal review or investigation requests, such as "look at PR comments", first complete the normal tool workflow: use `+"`"+`gh`+"`"+`/repo inspection/checks/diff, answer or implement the review, and preserve evidence. Only after that, if a durable lesson was discovered, run `+"`"+`sima remember ... --source review --path .`+"`"+`. SIMA should learn from the completed evidence; it must not shortcut the familiar GitHub/repo workflow.
 
+## SIMA-managed PR fixes
+
+If the user asks to fix PR comments through SIMA, delegate the implementation to the harness instead of doing the edits directly in the current agent session:
+
+`+"```bash"+`
+sima learn --backend <backend-name> --task "Address PR review comments using gh/repo inspection, implement fixes, run verification, and propose durable lessons only if found." --path .
+`+"```"+`
+
+The SIMA worker should still use the normal GitHub/repo workflow inside the task: `+"`"+`gh pr view`+"`"+`, review/comment APIs, checks, diffs, file inspection, edits, and tests. Use this path when the request is to actually change code or "fix/address PR comments". For inspect-only requests like "look at PR comments" or "summarize review", do the normal investigation in the current session and use `+"`"+`sima remember ... --source review`+"`"+` only after a durable lesson is clear.
+
 ## After a successful task
 
 Run SIMA learning for the completed task:

@@ -115,6 +115,16 @@ Without `--backend`, this writes a pending candidate plus evidence file and prin
 
 For review tasks, do not make the agent start with SIMA. If the user says "look at PR comments", the agent should first use its normal `gh`/repo/checks/diff flow, answer or implement the review, preserve evidence, and only then run `sima remember ... --source review --path .` if the review revealed a durable lesson.
 
+If the request is to actually change code and the user asks to do it through SIMA, use the harness as the worker runner while keeping the normal PR workflow inside the task:
+
+```bash
+sima learn --backend <backend-name> \
+  --task "Address PR review comments using gh/repo inspection, implement fixes, run verification, and propose durable lessons only if found." \
+  --path .
+```
+
+This means PR fixes can be SIMA-managed, but the worker should still use `gh pr view`, review/comment APIs, checks, diffs, file inspection, edits, and tests. For inspect-only prompts like "look at PR comments", do not spawn a fixing run unless the user asks to fix/address them.
+
 ## 6. Manual backend add
 
 Choose one installed executable.

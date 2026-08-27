@@ -58,6 +58,9 @@ func TestInstallCommand(t *testing.T) {
 		if !strings.Contains(string(data), "route it through the SIMA harness") || !strings.Contains(string(data), "sima remember") || !strings.Contains(string(data), "native memory") {
 			t.Fatalf("missing explicit SIMA remember instructions in %s:\n%s", rel, data)
 		}
+		if !strings.Contains(string(data), "SIMA-managed PR fixes") || !strings.Contains(string(data), "Address PR review comments using gh/repo inspection") {
+			t.Fatalf("missing SIMA-managed PR fix instructions in %s:\n%s", rel, data)
+		}
 	}
 }
 

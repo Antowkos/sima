@@ -47,6 +47,7 @@ sima setup
 sima doctor .
 sima brief "small real task" --path .
 sima remember "durable project knowledge" --source user --type invariant --trigger "When this knowledge is relevant." --path .
+sima learn --backend <name> --task "Address PR review comments using gh/repo inspection, implement fixes, run verification, and propose durable lessons only if found." --path .
 sima learn --backend <name> --task "small real task" --path .
 sima learn --backend <name> --task "small real task" --json --path .
 sima candidates list --status all --path .
@@ -74,10 +75,11 @@ For each pilot run, collect:
 3. **Brief quality** — was retrieved memory/skill context useful or noisy?
 4. **Proposal quality** — did proposed memory/skill feel durable, triggerable, and non-transient?
 5. **Explicit memory routing** — when asked to remember project knowledge, did Claude/Codex use `sima remember` instead of native/simple memory?
-6. **Archivist quality** — did apply/defer/reject match human judgment?
-7. **Auto-learning trust** — did the auto-applied personal memory/skill feel safe and useful? What would make it trustworthy enough for regular use?
-8. **Recovery/debuggability** — could they inspect runs, candidates, evidence, and lint results?
-9. **Missing integrations** — Claude commands, Codex `AGENTS.md`, CI, GitHub issues, Slack/Telegram reporting, etc.
+6. **PR fix routing** — when asked to fix/address PR comments through SIMA, did Claude/Codex run `sima learn` while the worker still used normal `gh`/repo/checks/diff flow?
+7. **Archivist quality** — did apply/defer/reject match human judgment?
+8. **Auto-learning trust** — did the auto-applied personal memory/skill feel safe and useful? What would make it trustworthy enough for regular use?
+9. **Recovery/debuggability** — could they inspect runs, candidates, evidence, and lint results?
+10. **Missing integrations** — Claude commands, Codex `AGENTS.md`, CI, GitHub issues, Slack/Telegram reporting, etc.
 
 ## Alpha blockers
 
