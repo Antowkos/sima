@@ -7,14 +7,25 @@ import (
 	"testing"
 )
 
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 	root := t.TempDir()
 	result, err := InstallInstructions(root, InstallOptions{})
 	if err != nil {
 		t.Fatalf("InstallInstructions() error = %v", err)
 	}
-	if len(result.Written) != 2 {
-		t.Fatalf("expected two written files, got %#v", result.Written)
+	for _, want := range []string{"CLAUDE.md", "AGENTS.md", ".claude/commands/sima.md", ".claude/commands/sima-brief.md", ".claude/commands/sima-remember.md"} {
+		if !containsString(result.Written, want) {
+			t.Fatalf("written files missing %s: %#v", want, result.Written)
+		}
 	}
 	for _, rel := range []string{"CLAUDE.md", "AGENTS.md"} {
 		data, err := os.ReadFile(filepath.Join(root, rel))
@@ -23,6 +34,18 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 		}
 		text := string(data)
 		for _, want := range []string{managedBlockStart, "sima brief \"<task>\" --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "Do not learn: transient task progress", managedBlockEnd} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("%s missing %q:\n%s", rel, want, text)
+			}
+		}
+	}
+	for _, rel := range []string{".claude/commands/sima.md", ".claude/commands/sima-brief.md", ".claude/commands/sima-remember.md"} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		text := string(data)
+		for _, want := range []string{"description:", "$ARGUMENTS", "sima"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}

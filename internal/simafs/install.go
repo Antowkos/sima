@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -13,6 +14,12 @@ const managedBlockEnd = "<!-- END SIMA MANAGED INSTRUCTIONS -->"
 var instructionTargets = map[string]string{
 	"claude": "CLAUDE.md",
 	"codex":  "AGENTS.md",
+}
+
+var claudeCommandTargets = map[string]string{
+	"sima":          filepath.ToSlash(filepath.Join(".claude", "commands", "sima.md")),
+	"sima-brief":    filepath.ToSlash(filepath.Join(".claude", "commands", "sima-brief.md")),
+	"sima-remember": filepath.ToSlash(filepath.Join(".claude", "commands", "sima-remember.md")),
 }
 
 type InstallOptions struct {
@@ -40,8 +47,36 @@ func InstallInstructions(projectRoot string, opts InstallOptions) (InstallResult
 			return result, err
 		}
 		result.Written = append(result.Written, filepath.ToSlash(filename))
+		if normalized == "claude" {
+			written, err := installClaudeCommands(projectRoot)
+			if err != nil {
+				return result, err
+			}
+			result.Written = append(result.Written, written...)
+		}
 	}
 	return result, nil
+}
+
+func installClaudeCommands(projectRoot string) ([]string, error) {
+	commands := map[string]string{
+		claudeCommandTargets["sima"]:          claudeSIMACommand(),
+		claudeCommandTargets["sima-brief"]:    claudeSIMABriefCommand(),
+		claudeCommandTargets["sima-remember"]: claudeSIMARememberCommand(),
+	}
+	var written []string
+	for rel, content := range commands {
+		path := filepath.Join(projectRoot, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return written, fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(strings.TrimSpace(content)+"\n"), 0o644); err != nil {
+			return written, fmt.Errorf("write %s: %w", path, err)
+		}
+		written = append(written, rel)
+	}
+	sort.Strings(written)
+	return written, nil
 }
 
 func upsertManagedBlock(path string, block string) error {
@@ -134,6 +169,16 @@ sima learn --backend <backend-name> --task "<task>" --json --path .
 
 Use `+"`"+`--no-auto-apply`+"`"+` only for sensitive repos, demos, or debugging. Personal/local learning auto-applies by default only after archivist and apply-ready gates pass. Team/shared knowledge remains review-required.
 
+## Slash commands
+
+Claude Code projects may also have SIMA slash commands under `+"`"+`.claude/commands/`+"`"+`:
+
+- `+"`"+`/sima <task>`+"`"+` runs the task through the SIMA briefing + normal work + learning flow.
+- `+"`"+`/sima-brief <task>`+"`"+` generates a SIMA task briefing.
+- `+"`"+`/sima-remember <knowledge>`+"`"+` routes explicit durable knowledge through `+"`"+`sima remember`+"`"+`.
+
+Codex currently receives equivalent routing through `+"`"+`AGENTS.md`+"`"+` instructions; do not assume unknown Codex slash commands are available unless the current Codex installation documents or loads them.
+
 ## What SIMA should learn
 
 Good memory: durable decisions, invariants, gotchas, guardrails, anti-patterns, open questions, and workflows with clear recall triggers and evidence.
@@ -142,4 +187,73 @@ Good skills: reusable procedures with trigger, steps, pitfalls, and verification
 
 Do not learn: transient task progress, raw run summaries, PR/issue numbers, secrets, credentials, tokens, or stale TODOs.
 `, label, label)
+}
+
+func claudeSIMACommand() string {
+	return `---
+description: Run a task with the SIMA project-memory flow
+argument-hint: <task>
+allowed-tools: Bash(sima:*), Bash(git:*), Bash(gh:*), Read, Glob, Grep, Edit, MultiEdit, Write
+---
+
+# SIMA task flow
+
+The user invoked /sima with this task:
+
+$ARGUMENTS
+
+Run the SIMA project-memory flow without requiring the user to mention SIMA again.
+
+1. If $ARGUMENTS is empty, ask the user for the task and stop.
+2. Run: sima brief "$ARGUMENTS" --path .
+3. Read the brief and use active SIMA memory/skills plus the current repository as context.
+4. Do the normal repository workflow for the task: inspect files, use git/gh when relevant, edit files, and run real verification.
+5. Preserve evidence: changed files, test/build output, important decisions, and blockers.
+6. After successful bounded work, run: sima learn --backend <backend-name> --task "$ARGUMENTS" --path .
+
+Use the backend configured for this project. If no backend is obvious, run sima backend list . and pick the configured Claude/Codex profile. If no backend exists, tell the user exactly what is missing and do not fake learning.
+
+Only let SIMA learn durable, reusable project knowledge. Do not store transient progress, secrets, credentials, raw logs, or PR/issue numbers as durable facts.`
+}
+
+func claudeSIMABriefCommand() string {
+	return `---
+description: Generate a SIMA briefing for a task
+argument-hint: <task>
+allowed-tools: Bash(sima:*)
+---
+
+# SIMA brief
+
+The user invoked /sima-brief with this task:
+
+$ARGUMENTS
+
+If $ARGUMENTS is empty, ask the user for the task and stop.
+
+Run: sima brief "$ARGUMENTS" --path .
+
+Summarize the briefing sections that matter for the task. Do not paste unrelated raw history into the conversation.`
+}
+
+func claudeSIMARememberCommand() string {
+	return `---
+description: Save durable project knowledge through SIMA
+argument-hint: <durable project knowledge>
+allowed-tools: Bash(sima:*)
+---
+
+# SIMA remember
+
+The user invoked /sima-remember with this knowledge:
+
+$ARGUMENTS
+
+If $ARGUMENTS is empty, ask the user what durable project knowledge should be remembered and stop.
+
+Classify the knowledge as one of: decision, invariant, gotcha, workflow, guardrail, anti_pattern, or open_question. Create a clear trigger beginning with "When ...".
+
+Then run: sima remember "$ARGUMENTS" --source user --type <type> --trigger "When ..." --path .
+
+Do not store secrets, credentials, tokens, transient task progress, raw logs, or soon-stale issue/PR numbers. Report the candidate or applied result path shown by SIMA.`
 }

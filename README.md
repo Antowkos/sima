@@ -79,9 +79,12 @@ sima setup
 SIMA writes:
 
 ```text
-.sima/     # project-local memory, skills, runs, evidence, config
-CLAUDE.md  # Claude Code project instructions
-AGENTS.md  # Codex/OpenAI agent project instructions
+.sima/                         # project-local memory, skills, runs, evidence, config
+CLAUDE.md                      # Claude Code project instructions
+AGENTS.md                      # Codex/OpenAI agent project instructions
+.claude/commands/sima.md       # Claude slash command: /sima <task>
+.claude/commands/sima-brief.md # Claude slash command: /sima-brief <task>
+.claude/commands/sima-remember.md # Claude slash command: /sima-remember <knowledge>
 ```
 
 `CLAUDE.md` and `AGENTS.md` receive an upserted managed block:
@@ -122,7 +125,15 @@ sima remember "<durable project knowledge>" \
   --path .
 ```
 
-Claude Code reads `CLAUDE.md`; Codex/OpenAI agents read `AGENTS.md`. See [Using SIMA with Agents](docs/agent-usage.md) for exact Claude/Codex flows, PR-review usage, backend setup, and safety rules.
+Claude Code reads `CLAUDE.md`; Codex/OpenAI agents read `AGENTS.md`. Claude Code also gets project slash commands, so you can type:
+
+```text
+/sima fix the failing auth tests
+/sima-brief plan the database migration
+/sima-remember API handlers must use generated request types
+```
+
+See [Using SIMA with Agents](docs/agent-usage.md) for exact Claude/Codex flows, PR-review usage, backend setup, and safety rules. Codex support for project-defined slash commands is not assumed; Codex receives equivalent routing through `AGENTS.md` until a verified Codex command/plugin mechanism is added.
 
 ## Core flow
 

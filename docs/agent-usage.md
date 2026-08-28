@@ -26,12 +26,15 @@ sima install --client all --path .
 sima backend add <name> --kind <claude-code|codex> --executable <path> --path .
 ```
 
-SIMA writes project-local state and managed agent instructions:
+SIMA writes project-local state, managed agent instructions, and Claude Code slash commands:
 
 ```text
-.sima/                 # project-local memory, skills, runs, evidence, config
-CLAUDE.md              # Claude Code project instructions
-AGENTS.md              # Codex/OpenAI agent project instructions
+.sima/                         # project-local memory, skills, runs, evidence, config
+CLAUDE.md                      # Claude Code project instructions
+AGENTS.md                      # Codex/OpenAI agent project instructions
+.claude/commands/sima.md       # Claude: /sima <task>
+.claude/commands/sima-brief.md # Claude: /sima-brief <task>
+.claude/commands/sima-remember.md # Claude: /sima-remember <knowledge>
 ```
 
 `CLAUDE.md` and `AGENTS.md` are upserted with a managed block:
@@ -58,9 +61,23 @@ The installed Claude/Codex block tells the agent to:
 
 ## How to use SIMA in Claude Code
 
-After `sima setup`, Claude Code reads `CLAUDE.md` automatically for the project.
+After `sima setup`, Claude Code reads `CLAUDE.md` automatically for the project. SIMA also installs project slash commands under `.claude/commands/`.
 
-Suggested human prompt:
+You can type:
+
+```text
+/sima fix the failing auth tests
+/sima-brief plan the database migration
+/sima-remember API handlers must use generated request types
+```
+
+Command behavior:
+
+- `/sima <task>`: runs `sima brief`, performs the normal repo workflow, verifies, then runs `sima learn` for durable lessons.
+- `/sima-brief <task>`: only generates and summarizes a SIMA briefing.
+- `/sima-remember <knowledge>`: classifies durable project knowledge and routes it through `sima remember`.
+
+Suggested human prompt when not using slash commands:
 
 ```text
 Use SIMA for this task. Start with `sima brief`, do the normal repo workflow, verify with tests, then run `sima learn` only for durable lessons.
@@ -91,6 +108,8 @@ sima setup --backend claude --executable /path/to/claude-wrapper
 ## How to use SIMA in Codex
 
 After `sima setup`, Codex reads `AGENTS.md` automatically for the project.
+
+Current Codex support is instruction-based rather than confirmed project slash-command based: SIMA tells Codex to route SIMA-like requests through `sima brief`, `sima learn`, and `sima remember`. Do not rely on unknown Codex slash commands being accepted by the TUI until SIMA adds a verified Codex plugin/command integration.
 
 Suggested human prompt:
 
