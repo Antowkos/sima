@@ -22,7 +22,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InstallInstructions() error = %v", err)
 	}
-	for _, want := range []string{"CLAUDE.md", "AGENTS.md", ".claude/commands/sima.md", ".claude/commands/sima-brief.md", ".claude/commands/sima-remember.md"} {
+	for _, want := range []string{"CLAUDE.md", "AGENTS.md", ".claude/commands/sima.md", ".claude/commands/sima-brief.md", ".claude/commands/sima-remember.md", ".codex/skills/sima/SKILL.md", ".codex/skills/sima-brief/SKILL.md", ".codex/skills/sima-remember/SKILL.md"} {
 		if !containsString(result.Written, want) {
 			t.Fatalf("written files missing %s: %#v", want, result.Written)
 		}
@@ -46,6 +46,18 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 		}
 		text := string(data)
 		for _, want := range []string{"description:", "$ARGUMENTS", "sima"} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("%s missing %q:\n%s", rel, want, text)
+			}
+		}
+	}
+	for _, rel := range []string{".codex/skills/sima/SKILL.md", ".codex/skills/sima-brief/SKILL.md", ".codex/skills/sima-remember/SKILL.md"} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		text := string(data)
+		for _, want := range []string{"description:", "name: sima", "sima"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}

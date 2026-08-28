@@ -85,6 +85,9 @@ AGENTS.md                      # Codex/OpenAI agent project instructions
 .claude/commands/sima.md       # Claude slash command: /sima <task>
 .claude/commands/sima-brief.md # Claude slash command: /sima-brief <task>
 .claude/commands/sima-remember.md # Claude slash command: /sima-remember <knowledge>
+.codex/skills/sima/SKILL.md    # Codex skill for /sima-like SIMA flow
+.codex/skills/sima-brief/SKILL.md # Codex skill for SIMA briefing
+.codex/skills/sima-remember/SKILL.md # Codex skill for durable memory requests
 ```
 
 `CLAUDE.md` and `AGENTS.md` receive an upserted managed block:
@@ -133,7 +136,7 @@ Claude Code reads `CLAUDE.md`; Codex/OpenAI agents read `AGENTS.md`. Claude Code
 /sima-remember API handlers must use generated request types
 ```
 
-See [Using SIMA with Agents](docs/agent-usage.md) for exact Claude/Codex flows, PR-review usage, backend setup, and safety rules. Codex support for project-defined slash commands is not assumed; Codex receives equivalent routing through `AGENTS.md` until a verified Codex command/plugin mechanism is added.
+See [Using SIMA with Agents](docs/agent-usage.md) for exact Claude/Codex flows, PR-review usage, backend setup, and safety rules. Codex gets project skills under `.codex/skills/...`; verified Codex prompt input includes these skills, so `/sima`-style prompts can route through the SIMA skill path when Codex passes them to the model.
 
 ## Core flow
 

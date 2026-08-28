@@ -14,7 +14,7 @@ sima lint [path]
 ```
 
 - `init` creates project-local `.sima/` storage.
-- `install` writes managed `CLAUDE.md` / `AGENTS.md` instructions and Claude Code project slash commands under `.claude/commands/`.
+- `install` writes managed `CLAUDE.md` / `AGENTS.md` instructions, Claude Code project slash commands under `.claude/commands/`, and Codex project skills under `.codex/skills/`.
 - `setup` runs `init`, `install`, optional backend setup, and preflight checks.
 - `doctor` checks scaffold/config/backends/lint/candidate queue health.
 - `lint` checks malformed knowledge files, lifecycle status, candidate queues, and unsafe paths.

@@ -35,6 +35,9 @@ AGENTS.md                      # Codex/OpenAI agent project instructions
 .claude/commands/sima.md       # Claude: /sima <task>
 .claude/commands/sima-brief.md # Claude: /sima-brief <task>
 .claude/commands/sima-remember.md # Claude: /sima-remember <knowledge>
+.codex/skills/sima/SKILL.md    # Codex skill for SIMA flow
+.codex/skills/sima-brief/SKILL.md # Codex skill for SIMA briefing
+.codex/skills/sima-remember/SKILL.md # Codex skill for durable memory requests
 ```
 
 `CLAUDE.md` and `AGENTS.md` are upserted with a managed block:
@@ -107,9 +110,29 @@ sima setup --backend claude --executable /path/to/claude-wrapper
 
 ## How to use SIMA in Codex
 
-After `sima setup`, Codex reads `AGENTS.md` automatically for the project.
+After `sima setup`, Codex reads `AGENTS.md` automatically for the project. SIMA also installs project skills under `.codex/skills/`:
 
-Current Codex support is instruction-based rather than confirmed project slash-command based: SIMA tells Codex to route SIMA-like requests through `sima brief`, `sima learn`, and `sima remember`. Do not rely on unknown Codex slash commands being accepted by the TUI until SIMA adds a verified Codex plugin/command integration.
+```text
+.codex/skills/sima/SKILL.md
+.codex/skills/sima-brief/SKILL.md
+.codex/skills/sima-remember/SKILL.md
+```
+
+Verified with `codex debug prompt-input`: project `.codex/skills/...` entries are included in Codex's model-visible skill list. This gives Codex a native skill route for `/sima`-style prompts and natural requests such as “use SIMA for this task”.
+
+Use:
+
+```text
+/sima fix the failing auth tests
+/sima-brief plan the database migration
+/sima-remember API handlers must use generated request types
+```
+
+If a Codex TUI build intercepts unknown slash commands before they reach the model, use the natural-language fallback:
+
+```text
+Use the sima skill: fix the failing auth tests
+```
 
 Suggested human prompt:
 

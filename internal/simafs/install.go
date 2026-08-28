@@ -22,6 +22,12 @@ var claudeCommandTargets = map[string]string{
 	"sima-remember": filepath.ToSlash(filepath.Join(".claude", "commands", "sima-remember.md")),
 }
 
+var codexSkillTargets = map[string]string{
+	"sima":          filepath.ToSlash(filepath.Join(".codex", "skills", "sima", "SKILL.md")),
+	"sima-brief":    filepath.ToSlash(filepath.Join(".codex", "skills", "sima-brief", "SKILL.md")),
+	"sima-remember": filepath.ToSlash(filepath.Join(".codex", "skills", "sima-remember", "SKILL.md")),
+}
+
 type InstallOptions struct {
 	Clients []string
 }
@@ -49,6 +55,13 @@ func InstallInstructions(projectRoot string, opts InstallOptions) (InstallResult
 		result.Written = append(result.Written, filepath.ToSlash(filename))
 		if normalized == "claude" {
 			written, err := installClaudeCommands(projectRoot)
+			if err != nil {
+				return result, err
+			}
+			result.Written = append(result.Written, written...)
+		}
+		if normalized == "codex" {
+			written, err := installCodexSkills(projectRoot)
 			if err != nil {
 				return result, err
 			}
