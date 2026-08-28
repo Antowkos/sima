@@ -15,6 +15,7 @@ type Config struct {
 	Project  Project                   `yaml:"project"`
 	Policy   Policy                    `yaml:"policy"`
 	Learn    Learn                     `yaml:"learn"`
+	Team     Team                      `yaml:"team,omitempty"`
 	Backends map[string]BackendProfile `yaml:"backends"`
 
 	LearnConfigured bool `yaml:"-"`
@@ -35,6 +36,17 @@ type Policy struct {
 type Learn struct {
 	AutoApply           bool `yaml:"auto_apply"`
 	AutoCleanupDeferred bool `yaml:"auto_cleanup_deferred"`
+}
+
+type Team struct {
+	Repo      string `yaml:"repo,omitempty"`
+	Ref       string `yaml:"ref,omitempty"`
+	AutoApply bool   `yaml:"auto_apply"`
+	SyncMode  string `yaml:"sync_mode,omitempty"`
+}
+
+func (t Team) IsZero() bool {
+	return t.Repo == "" && t.Ref == "" && !t.AutoApply && t.SyncMode == ""
 }
 
 func DefaultLearn() Learn {

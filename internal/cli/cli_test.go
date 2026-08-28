@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,6 +32,80 @@ func TestUnknownCommand(t *testing.T) {
 	}
 	if !strings.Contains(err.String(), "unknown command") {
 		t.Fatalf("unexpected stderr: %q", err.String())
+	}
+}
+
+func TestTeamCommandsInitPullStatus(t *testing.T) {
+	root := t.TempDir()
+	if _, initErr := simafs.Init(root); initErr != nil {
+		t.Fatalf("Init() error = %v", initErr)
+	}
+	teamRepo := createCLITeamRepo(t)
+
+	var out, stderr bytes.Buffer
+	code := Run([]string{"sima", "team", "init", "--repo", teamRepo, "--ref", "main", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("team init code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Configured team knowledge repo", "Team auto-apply: false", "Next: sima team pull"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("team init output missing %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "team", "pull", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("team pull code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Pulled team knowledge", "Mirrored files: 2", ".sima/team/memory/cards/team.yaml", ".sima/team/skills/active/team-skill.md"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("team pull output missing %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	stderr.Reset()
+	code = Run([]string{"sima", "team", "status", "--path", root}, &out, &stderr)
+	if code != 0 {
+		t.Fatalf("team status code = %d, stdout = %s stderr = %s", code, out.String(), stderr.String())
+	}
+	for _, want := range []string{"Configured: true", "Source cloned: true", "Team memory cards: 1", "Team skills: 1"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("team status output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func createCLITeamRepo(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "memory", "cards"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "skills", "active"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "memory", "cards", "team.yaml"), []byte("id: team\nstatus: active\ntype: invariant\ntitle: CLI team memory\ntrigger: When syncing team knowledge.\nsummary: Team memory mirrors into project .sima/team.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "skills", "active", "team-skill.md"), []byte("---\nstatus: active\n---\n# CLI Team Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runCLIGit(t, repo, "init", "-b", "main")
+	runCLIGit(t, repo, "add", ".")
+	runCLIGit(t, repo, "-c", "user.name=SIMA Test", "-c", "user.email=sima@example.test", "commit", "-m", "seed team knowledge")
+	return repo
+}
+
+func runCLIGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
 	}
 }
 

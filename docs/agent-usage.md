@@ -244,16 +244,28 @@ Team knowledge is promoted, not born shared:
 local learn → personal active memory/skill → explicit team proposal → PR review → merge → team pull → future briefs
 ```
 
-Planned commands:
+Implemented consumption commands:
 
 ```bash
-sima team init --repo <git-url> --path .
+sima team init --repo <git-url> [--ref main] --path .
 sima team pull --path .
 sima team status --path .
-sima team propose <memory-or-skill-id|path> --path .
 ```
 
-The consumption side comes first: `team pull` should update `.sima/team/...`, and `sima brief` should prefer relevant active team knowledge over conflicting personal knowledge. Promotion comes later through a reviewable PR into the shared team knowledge repository.
+The shared knowledge repo should contain reviewed artifacts in this layout:
+
+```text
+memory/cards/*.yaml
+skills/active/*.md
+```
+
+`team pull` clones/fetches the repo into `.sima/team/source` and mirrors reviewed artifacts into `.sima/team/memory/cards` and `.sima/team/skills/active`. `sima brief` then includes active team memory/skills in future task briefings.
+
+Promotion comes later through a reviewable PR into the shared team knowledge repository. Planned command:
+
+```bash
+sima team propose <memory-or-skill-id|path> --path .
+```
 
 ## Safety rules for agents
 

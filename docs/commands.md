@@ -82,19 +82,34 @@ sima backend doctor <name> [path]
 
 Backends are named profiles. They can point to different Claude/Codex binaries, config dirs, env files, wrappers, working directories, permission modes, or metadata.
 
-## Team flow planned commands
+## Team flow
 
-The team flow is planned, not fully implemented yet:
+Consumption is implemented first; promotion stays review-required and will be added separately.
 
 ```bash
-sima team init --repo <git-url> --path .
-sima team pull --path .
-sima team status --path .
-sima team propose <memory-or-skill-id|path> --path .
+sima team init --repo <git-url> [--ref main] [--path path]
+sima team pull [--path path]
+sima team status [--path path]
+```
+
+- `team init` stores the shared knowledge repo in `.sima/config.yaml` with `auto_apply: false` and `sync_mode: mirror`.
+- `team pull` clones/fetches the repo into `.sima/team/source` and mirrors reviewed files into `.sima/team/memory/cards` and `.sima/team/skills/active`.
+- `team status` reports configuration, clone status, and local mirror counts.
+- Expected knowledge repo layout:
+
+```text
+memory/cards/*.yaml
+skills/active/*.md
 ```
 
 Intended model:
 
 ```text
 local learn → personal active → explicit team propose PR → review/merge → team pull → brief
+```
+
+Planned next command:
+
+```bash
+sima team propose <memory-or-skill-id|path> --path .
 ```

@@ -22,6 +22,7 @@ import (
 	"github.com/antowkos/sima/internal/review"
 	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
+	teamflow "github.com/antowkos/sima/internal/team"
 )
 
 var Version = "0.1.0-dev"
@@ -51,6 +52,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runLint(args[2:], stdout, stderr)
 	case "backend":
 		return runBackend(args[2:], stdout, stderr)
+	case "team":
+		return runTeam(args[2:], stdout, stderr)
 	case "brief":
 		return runBrief(args[2:], stdout, stderr)
 	case "run":
@@ -103,6 +106,9 @@ Usage:
   sima candidates cleanup [--path <path>]
   sima memory list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
   sima skill list [--status <active|deprecated|superseded|archived|all>] [--path <path>]
+  sima team init --repo <git-url> [--ref <ref>] [--path <path>]
+  sima team pull [--path <path>]
+  sima team status [--path <path>]
   sima backend list [path]
   sima backend add <name> --kind <claude-code|codex> --executable <path> [options]
   sima backend doctor <name> [path]
@@ -123,6 +129,7 @@ Current v0 slice:
   candidates List, inspect, and clean candidate proposals
   apply    Promote an approved safe personal proposal into active memory/skills
   archivist Decide apply/reject/defer for a candidate proposal with deterministic gates
+  team     Configure and sync review-required shared team knowledge
   backend  Manage named Claude Code/Codex backend profiles`)
 }
 
@@ -1430,6 +1437,164 @@ func runArchivist(args []string, stdout, stderr io.Writer) int {
 	for _, note := range result.Notes {
 		fmt.Fprintf(stdout, "  - %s\n", note)
 	}
+	return 0
+}
+
+func runTeam(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		printTeamHelp(stderr)
+		return 2
+	}
+	switch args[0] {
+	case "init":
+		return runTeamInit(args[1:], stdout, stderr)
+	case "pull", "sync":
+		return runTeamPull(args[1:], stdout, stderr)
+	case "status":
+		return runTeamStatus(args[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "unknown team command: %s\n\n", args[0])
+		printTeamHelp(stderr)
+		return 2
+	}
+}
+
+func printTeamHelp(w io.Writer) {
+	fmt.Fprintln(w, `Usage:
+  sima team init --repo <git-url> [--ref <ref>] [--path <path>]
+  sima team pull [--path <path>]
+  sima team status [--path <path>]
+
+Team knowledge is read-only in the project mirror. Promote local knowledge through reviewable PRs later; do not auto-apply team knowledge.`)
+}
+
+func runTeamInit(args []string, stdout, stderr io.Writer) int {
+	root, repo, ref := ".", "", "main"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--repo":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--repo requires a value")
+				return 2
+			}
+			i++
+			repo = args[i]
+		case "--ref":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--ref requires a value")
+				return 2
+			}
+			i++
+			ref = args[i]
+		case "--help", "-h":
+			printTeamHelp(stdout)
+			return 0
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	if err := teamflow.Init(abs, teamflow.InitOptions{Repo: repo, Ref: ref}); err != nil {
+		fmt.Fprintf(stderr, "team init failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Configured team knowledge repo: %s\n", repo)
+	fmt.Fprintf(stdout, "Ref: %s\n", ref)
+	fmt.Fprintln(stdout, "Sync mode: mirror")
+	fmt.Fprintln(stdout, "Team auto-apply: false")
+	fmt.Fprintln(stdout, "Next: sima team pull --path "+abs)
+	return 0
+}
+
+func runTeamPull(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--help", "-h":
+			printTeamHelp(stdout)
+			return 0
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	result, err := teamflow.Pull(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "team pull failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Pulled team knowledge from %s (%s)\n", result.Repo, result.Ref)
+	fmt.Fprintf(stdout, "Source: %s\n", result.SourcePath)
+	fmt.Fprintf(stdout, "Mirrored files: %d\n", len(result.Copied))
+	for _, path := range result.Copied {
+		fmt.Fprintf(stdout, "  - %s\n", path)
+	}
+	return 0
+}
+
+func runTeamStatus(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		case "--help", "-h":
+			printTeamHelp(stdout)
+			return 0
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	status, err := teamflow.Inspect(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "team status failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Configured: %t\n", status.Configured)
+	if status.Configured {
+		fmt.Fprintf(stdout, "Repo: %s\n", status.Repo)
+		fmt.Fprintf(stdout, "Ref: %s\n", status.Ref)
+		fmt.Fprintf(stdout, "Sync mode: %s\n", status.SyncMode)
+		fmt.Fprintf(stdout, "Team auto-apply: %t\n", status.AutoApply)
+	}
+	fmt.Fprintf(stdout, "Source cloned: %t\n", status.SourceExists)
+	fmt.Fprintf(stdout, "Team memory cards: %d\n", status.MemoryCards)
+	fmt.Fprintf(stdout, "Team skills: %d\n", status.Skills)
 	return 0
 }
 

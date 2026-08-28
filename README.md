@@ -173,18 +173,34 @@ local learn → personal active memory/skill → explicit team proposal → PR r
 
 A developer or agent first proves a memory/skill locally. If it is useful beyond one person, SIMA should propose it to a shared team knowledge repository through a normal pull request. Team knowledge becomes authoritative only after review and merge.
 
-Planned commands:
+Implemented consumption commands:
 
 ```bash
-sima team init --repo <git-url> --path .
+sima team init --repo <git-url> [--ref main] --path .
 sima team pull --path .
 sima team status --path .
-sima team propose <memory-or-skill-id|path> --path .
 ```
 
-Consumption comes first: `team pull` should update the local read-only mirror under `.sima/team/...`, and `sima brief` should prefer relevant active team knowledge over conflicting personal knowledge.
+`team init` stores a read-only mirror config:
 
-Promotion comes second: `team propose` should create a reviewable PR containing the memory/skill, trigger, evidence, source local item, safety notes, and rationale for why it belongs in team scope.
+```yaml
+team:
+  repo: <git-url>
+  ref: main
+  auto_apply: false
+  sync_mode: mirror
+```
+
+`team pull` clones/fetches the shared knowledge repo into `.sima/team/source` and mirrors these reviewed artifacts into the local project:
+
+```text
+memory/cards/*   → .sima/team/memory/cards/*
+skills/active/*  → .sima/team/skills/active/*
+```
+
+`team status` reports whether the repo is configured/cloned and how many team memory cards/skills are available locally.
+
+Planned promotion command: `team propose` should create a reviewable PR containing the memory/skill, trigger, evidence, source local item, safety notes, and rationale for why it belongs in team scope.
 
 ## Command reference
 

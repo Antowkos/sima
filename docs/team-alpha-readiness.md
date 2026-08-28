@@ -34,6 +34,7 @@ Rationale:
 - auto-learning is the core SIMA value and must be exercised during team alpha, not postponed;
 - personal/local memory should auto-apply when it passes archivist and deterministic apply-ready gates;
 - team/shared memory should stay review-required until the workflow is trusted;
+- reviewed team knowledge is synced into each project as a read-only mirror with `sima team init`, `sima team pull`, and `sima team status`;
 - inspect-only `sima learn --no-auto-apply` remains available for sensitive repos, first-run demonstrations, and debugging;
 - cleanup can run automatically because it preserves audit history by changing deferred candidates to `status: deferred` rather than deleting them.
 
@@ -92,6 +93,7 @@ Before inviting more than 1–2 technical teammates, complete:
 - [x] `sima learn --json` emits a machine-readable summary for wrappers;
 - [x] `sima install` writes managed Claude Code/Codex project instructions;
 - [x] `sima setup` initializes a pilot repo with managed instructions plus backend/preflight setup;
+- [x] read-only team consumption commands exist: `sima team init --repo`, `sima team pull`, and `sima team status` mirror reviewed `memory/cards` and `skills/active` from a shared knowledge repo into `.sima/team/...`;
 - [x] `install.sh` is binary-only by default and offers setup as an explicit opt-in (`--setup` / legacy `--project`);
 - [x] short [5-minute setup guide](5-minute-setup.md) exists;
 - [x] real Claude Code auto-learning dogfood completed on a small task;
@@ -126,5 +128,5 @@ The team alpha is successful when:
 ## Suggested next alpha work
 
 1. Run the first 1–2 teammate pilots on real repositories.
-2. Capture setup/backend/brief/proposal/archivist feedback as issues or docs changes.
-3. Implement team-scope review-required flow after personal/local alpha behavior is trusted.
+2. Capture setup/backend/brief/proposal/archivist/team-sync feedback as issues or docs changes.
+3. Implement `sima team propose <id|path>` to open reviewable PRs into the shared knowledge repo after local knowledge proves reusable.
