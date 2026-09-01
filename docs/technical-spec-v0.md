@@ -35,12 +35,12 @@ The v0 brief includes:
 
 - the task;
 - system skills created by `sima init`;
-- compact snippets from active personal memory and skills, with source pointers;
-- compact snippets from active team/shared scaffold entries when present;
+- compact snippets from task-relevant active personal memory and skills, with source pointers;
+- compact snippets from task-relevant active team/shared scaffold entries when present;
 - SDD artifact paths under `docs/specs`, `docs/plans`, and `openspec/changes`;
 - safety policy reminders for reward-hacking prevention and clean-session archivist review.
 
-Brief content is bounded: active memory/skill snippets are truncated and limited by item count so briefings stay token-sparse while still surfacing learned knowledge. Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
+Brief content is bounded: active memory/skill snippets are filtered by task relevance, truncated, and limited by item count so briefings stay token-sparse while still surfacing learned knowledge. v0 uses a deterministic lexical heuristic over path/title/trigger/summary tokens instead of dumping every active item. This is deliberately simple and dependency-free for alpha, but it is a known limitation: a model/embedding-based relevance scorer should replace or augment the heuristic so semantically relevant knowledge can be retrieved without exact token overlap. Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
 
 ## Backend profiles
 

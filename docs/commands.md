@@ -27,7 +27,7 @@ sima run --backend <name> --task "task description" [--path path] [--no-propose]
 sima learn --backend <name> --task "task description" [--archivist-backend name] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path path]
 ```
 
-- `brief` emits a compact sourced context packet from active memory and skills.
+- `brief` emits a compact sourced context packet from active memory and skills. It filters active knowledge with a deterministic lexical task-relevance heuristic in v0; model/embedding relevance scoring is a known future improvement.
 - `run` executes a backend with the SIMA briefing and captures evidence.
 - `learn` runs the worker, parses structured learning proposals, runs clean-session archivist review, and auto-applies safe personal/local knowledge when configured.
 

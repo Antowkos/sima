@@ -221,6 +221,11 @@ func snippetsForPaths(projectRoot string, paths []string) []snippet {
 }
 
 func relevantToTask(task, relPath, content string) bool {
+	// Alpha retrieval is intentionally deterministic and dependency-free: match
+	// task tokens against path/title/trigger/summary tokens. This prevents whole
+	// active-memory dumps, but it is still a lexical heuristic. A future retriever
+	// should use a model/embedding scorer so semantically relevant knowledge can
+	// be selected even without exact token overlap.
 	taskTokens := meaningfulTokens(task)
 	if len(taskTokens) == 0 {
 		return false
