@@ -98,9 +98,9 @@ for item in req["texts"]:
     if item["id"] == "__task__":
         vec = [1.0, 0.0]
     elif "android" in text:
-        vec = [0.95, 0.0]
+        vec = [0.95, 0.3122498999]
     elif "guard" in text:
-        vec = [0.70, 0.0]
+        vec = [0.70, 0.7141428429]
     else:
         vec = [0.0, 1.0]
     items.append({"id": item["id"], "vector": vec})
