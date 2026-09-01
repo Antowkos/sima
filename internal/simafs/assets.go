@@ -23,6 +23,8 @@ brief:
     decomposition: none # none | heuristic | command
     command: ""
     max_parts: 4
+    top_k_per_part: 1
+    min_part_score: 0.80
 backends: {}
 `
 

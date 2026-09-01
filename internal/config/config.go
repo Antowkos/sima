@@ -53,9 +53,11 @@ type BriefEmbedding struct {
 }
 
 type BriefQuery struct {
-	Decomposition string `yaml:"decomposition,omitempty"`
-	Command       string `yaml:"command,omitempty"`
-	MaxParts      int    `yaml:"max_parts,omitempty"`
+	Decomposition string  `yaml:"decomposition,omitempty"`
+	Command       string  `yaml:"command,omitempty"`
+	MaxParts      int     `yaml:"max_parts,omitempty"`
+	TopKPerPart   int     `yaml:"top_k_per_part,omitempty"`
+	MinPartScore  float64 `yaml:"min_part_score,omitempty"`
 }
 
 type Team struct {

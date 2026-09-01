@@ -156,13 +156,74 @@ print(json.dumps({"queries": queries[: req.get("max_parts", 4)]}))
 
 	cfg.Query = config.BriefQuery{Decomposition: "command", Command: "./split-query.py", MaxParts: 4}
 	selected, ok = SelectRelevant(root, paths, "исправить guard-else-return и открыть PR", cfg)
-	if !ok || len(selected) != 2 || selected[0] != ".sima/personal/memory/cards/guard.yaml" || selected[1] != ".sima/personal/memory/cards/pr.yaml" {
+	if !ok || !sameStringSet(selected, []string{".sima/personal/memory/cards/guard.yaml", ".sima/personal/memory/cards/pr.yaml"}) {
 		t.Fatalf("command decomposition should recover both relevant topic cards without deploy noise: %#v ok=%v", selected, ok)
 	}
 
 	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
 	if ok || len(selected) != 0 {
 		t.Fatalf("unrelated query should stay empty with decomposition enabled: %#v ok=%v", selected, ok)
+	}
+}
+
+func TestSelectRelevantAnchoredPartTopKRescuesShortSubqueryWithoutUnrelatedNoise(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	writeCard(t, root, "guard.yaml", "active", "Guard before return", "When editing guard else return", "Keep guard before return style.")
+	writeCard(t, root, "pr.yaml", "active", "PR title and body format", "When opening a pull request", "Use the repository pull request format.")
+	writeCard(t, root, "deploy.yaml", "active", "Deployment workflow", "When deploying backend", "Use deployment checks.")
+
+	script := filepath.Join(root, "reported-scores-embed.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import math, json, sys
+req = json.load(sys.stdin)
+out = []
+for item in req["texts"]:
+    ident = item["id"]
+    text = (item.get("text", "") + " " + item.get("path", "")).lower()
+    if ident == "__task__" and "unit" in text:
+        vec = [math.sqrt(1 - 0.8385**2), 0.8385]
+    elif ident == "__task__" and "guard" in text and "pr" in text:
+        vec = [0.9, math.sqrt(1 - 0.9**2)]
+    elif ident.startswith("__task_part_") and "guard" in text:
+        vec = [1.0, 0.0]
+    elif ident.startswith("__task_part_") and "pr" in text:
+        vec = [math.sqrt(1 - 0.808**2), 0.808]
+    elif "guard" in text:
+        vec = [1.0, 0.0]
+    elif "pull request" in text or "pr" in text:
+        vec = [0.0, 1.0]
+    elif "deploy" in text:
+        vec = [-1.0, 0.0]
+    else:
+        vec = [0.0, -1.0]
+    out.append({"id": ident, "vector": vec})
+print(json.dumps({"embeddings": out}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Brief{
+		Retrieval:   "embedding",
+		MaxSelected: 8,
+		Embedding:   config.BriefEmbedding{Command: "./reported-scores-embed.py", Model: "test-embed", MinScore: 0.85},
+		Query:       config.BriefQuery{Decomposition: "heuristic", MaxParts: 4, TopKPerPart: 1, MinPartScore: 0.80},
+	}
+	paths := []string{".sima/personal/memory/cards/guard.yaml", ".sima/personal/memory/cards/pr.yaml", ".sima/personal/memory/cards/deploy.yaml"}
+	if _, err := Rebuild(root, cfg); err != nil {
+		t.Fatalf("Rebuild() error = %v", err)
+	}
+
+	selected, ok := SelectRelevant(root, paths, "исправить guard-else-return и открыть PR", cfg)
+	if !ok || len(selected) != 2 || selected[0] != ".sima/personal/memory/cards/guard.yaml" || selected[1] != ".sima/personal/memory/cards/pr.yaml" {
+		t.Fatalf("anchored part top-k should rescue short PR subquery with 0.808 score: %#v ok=%v", selected, ok)
+	}
+
+	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
+	if ok || len(selected) != 0 {
+		t.Fatalf("unrelated 0.8385 PR noise should not be rescued without a high-confidence anchor: %#v ok=%v", selected, ok)
 	}
 }
 
@@ -207,4 +268,21 @@ func writeCard(t *testing.T, root, name, status, title, trigger, summary string)
 		t.Fatal(err)
 	}
 	return path
+}
+
+func sameStringSet(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	counts := map[string]int{}
+	for _, item := range got {
+		counts[item]++
+	}
+	for _, item := range want {
+		counts[item]--
+		if counts[item] < 0 {
+			return false
+		}
+	}
+	return true
 }

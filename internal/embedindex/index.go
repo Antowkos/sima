@@ -79,6 +79,11 @@ type Candidate struct {
 	TextHash string
 }
 
+type scoredItem struct {
+	path  string
+	score float64
+}
+
 func IndexPath(projectRoot string) string {
 	return filepath.Join(projectRoot, filepath.FromSlash(indexRelPath))
 }
@@ -181,10 +186,15 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 	if err != nil {
 		return nil, false
 	}
-	var queryVectors [][]float64
+	type queryVector struct {
+		id     string
+		part   bool
+		vector []float64
+	}
+	var queryVectors []queryVector
 	for _, query := range queryTexts {
 		if vec := taskVectors[query.ID]; len(vec) > 0 {
-			queryVectors = append(queryVectors, vec)
+			queryVectors = append(queryVectors, queryVector{id: query.ID, part: query.ID != "__task__", vector: vec})
 		}
 	}
 	if len(queryVectors) == 0 {
@@ -198,20 +208,44 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 	if minScore == 0 {
 		minScore = defaultMinScore
 	}
-	type scored struct {
-		path  string
-		score float64
-	}
-	var scoredItems []scored
+	scoredByPath := map[string]scoredItem{}
+	allByQuery := map[string][]scoredItem{}
+	highConfidence := false
 	for _, c := range current {
 		entry, ok := entryByPath[c.Path]
 		if !ok || entry.TextHash != c.TextHash || entry.Model != cfg.Embedding.Model {
 			continue
 		}
-		score := maxCosine(queryVectors, entry.Vector)
-		if score >= minScore {
-			scoredItems = append(scoredItems, scored{path: c.Path, score: score})
+		best := -1.0
+		for _, query := range queryVectors {
+			score := cosine(query.vector, entry.Vector)
+			if score > best {
+				best = score
+			}
+			allByQuery[query.id] = append(allByQuery[query.id], scoredItem{path: c.Path, score: score})
+			if score >= minScore {
+				highConfidence = true
+			}
 		}
+		if best >= minScore {
+			scoredByPath[c.Path] = scoredItem{path: c.Path, score: best}
+		}
+	}
+	if highConfidence {
+		for _, query := range queryVectors {
+			if !query.part {
+				continue
+			}
+			for _, item := range topKRescue(allByQuery[query.id], cfg.Query) {
+				if existing, ok := scoredByPath[item.path]; !ok || item.score > existing.score {
+					scoredByPath[item.path] = item
+				}
+			}
+		}
+	}
+	scoredItems := make([]scoredItem, 0, len(scoredByPath))
+	for _, item := range scoredByPath {
+		scoredItems = append(scoredItems, item)
 	}
 	sort.SliceStable(scoredItems, func(i, j int) bool { return scoredItems[i].score > scoredItems[j].score })
 	if len(scoredItems) > maxSelected {
@@ -334,14 +368,28 @@ func uniqueQueries(values []string, limit int) []string {
 	return out
 }
 
-func maxCosine(queries [][]float64, item []float64) float64 {
-	best := -1.0
-	for _, query := range queries {
-		if score := cosine(query, item); score > best {
-			best = score
+func topKRescue(items []scoredItem, cfg config.BriefQuery) []scoredItem {
+	topK := cfg.TopKPerPart
+	if topK <= 0 {
+		return nil
+	}
+	floor := cfg.MinPartScore
+	if floor == 0 {
+		floor = 0.80
+	}
+	sorted := append([]scoredItem(nil), items...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].score > sorted[j].score })
+	rescued := make([]scoredItem, 0, topK)
+	for _, item := range sorted {
+		if item.score < floor {
+			continue
+		}
+		rescued = append(rescued, item)
+		if len(rescued) >= topK {
+			break
 		}
 	}
-	return best
+	return rescued
 }
 
 func Read(projectRoot string) ([]Entry, error) {
