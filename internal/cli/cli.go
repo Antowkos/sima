@@ -17,6 +17,7 @@ import (
 	"github.com/antowkos/sima/internal/candidates"
 	"github.com/antowkos/sima/internal/catalog"
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/embedindex"
 	"github.com/antowkos/sima/internal/lint"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
@@ -56,6 +57,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runTeam(args[2:], stdout, stderr)
 	case "brief":
 		return runBrief(args[2:], stdout, stderr)
+	case "index":
+		return runIndex(args[2:], stdout, stderr)
 	case "run":
 		return runRun(args[2:], stdout, stderr)
 	case "learn":
@@ -93,6 +96,7 @@ Usage:
   sima doctor [path]
   sima lint [path]
   sima brief <task> [--path <path>]
+  sima index rebuild [--path <path>]
   sima run --backend <name> --task <task> [--path <path>] [--no-propose]
   sima learn --backend <name> --task <task> [--archivist-backend <name>] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path <path>]
   sima remember <knowledge> [--source <user|review|agent>] [--type <memory-type>] [--title <title>] [--trigger <trigger>] [--backend <name>] [--path <path>]
@@ -121,6 +125,7 @@ Current v0 slice:
   doctor   Check SIMA project state and local runtime prerequisites
   lint     Check SIMA knowledge lifecycle metadata, candidates, and target paths
   brief    Create a compact task briefing from SIMA memory, skills, and SDD artifacts
+  index    Rebuild optional embedding retrieval indexes for active memory/skills
   run      Run a bounded task through a named backend, capture artifacts, and auto-propose candidates
   learn    Run the full gated self-improvement loop: run, propose, archivist, apply-ready, apply
   remember Capture explicit user/review/agent knowledge as a SIMA candidate, optionally archivist/apply it
@@ -673,6 +678,46 @@ func runBrief(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "Brief written: %s\n", result.Path)
+	return 0
+}
+
+func runIndex(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] != "rebuild" {
+		fmt.Fprintln(stderr, "usage: sima index rebuild [--path <path>]")
+		return 2
+	}
+	root := "."
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--path":
+			if i+1 >= len(args) {
+				fmt.Fprintln(stderr, "--path requires a value")
+				return 2
+			}
+			i++
+			root = args[i]
+		default:
+			fmt.Fprintf(stderr, "unknown option: %s\n", args[i])
+			return 2
+		}
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve path: %v\n", err)
+		return 1
+	}
+	cfg, err := config.Load(abs)
+	if err != nil {
+		fmt.Fprintf(stderr, "load config: %v\n", err)
+		return 1
+	}
+	result, err := embedindex.Rebuild(abs, cfg.Brief)
+	if err != nil {
+		fmt.Fprintf(stderr, "index rebuild failed: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Embedding index rebuilt: %s\n", result.Path)
+	fmt.Fprintf(stdout, "Indexed: %d, skipped: %d\n", result.Indexed, result.Skipped)
 	return 0
 }
 

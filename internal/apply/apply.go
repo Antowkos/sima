@@ -9,6 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/embedindex"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/review"
 )
@@ -128,6 +130,9 @@ func Apply(projectRoot string, opts Options) (Result, error) {
 	}
 	if err := os.WriteFile(proposalPath, data, 0o644); err != nil {
 		return Result{}, err
+	}
+	if cfg, err := config.Load(projectRoot); err == nil && embedindex.Enabled(cfg.Brief) {
+		_, _ = embedindex.UpdatePaths(projectRoot, cfg.Brief, applied)
 	}
 	return Result{ProposalPath: rel(projectRoot, proposalPath), Applied: applied}, nil
 }

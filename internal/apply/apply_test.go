@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/antowkos/sima/internal/config"
+	"github.com/antowkos/sima/internal/embedindex"
 	"github.com/antowkos/sima/internal/proposal"
 	"github.com/antowkos/sima/internal/runner"
 	"github.com/antowkos/sima/internal/simafs"
@@ -49,6 +50,33 @@ func TestApplyRequiresArchivistApply(t *testing.T) {
 	_, err := Apply(root, Options{Target: proposalPath})
 	if err == nil || !strings.Contains(err.Error(), "archivist_decision must be apply") {
 		t.Fatalf("expected archivist gate error, got %v", err)
+	}
+}
+
+func TestApplyUpdatesEmbeddingIndexWhenConfigured(t *testing.T) {
+	root, proposalPath := createProposal(t)
+	approveProposal(t, proposalPath)
+	writeFakeEmbedder(t, root)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Brief = config.Brief{Retrieval: "embedding", Embedding: config.BriefEmbedding{Command: "./fake-embed.py", Model: "test-embed", MinScore: 0.1}}
+	cfg.LearnConfigured = true
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply(root, Options{Target: proposalPath, Now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	entries, err := embedindex.Read(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Path != result.Applied[0] || len(entries[0].Vector) == 0 {
+		t.Fatalf("embedding index not updated for applied card: %#v", entries)
 	}
 }
 
@@ -218,4 +246,16 @@ func writeExistingMemory(t *testing.T, root, id, title, summary string) string {
 		t.Fatal(err)
 	}
 	return filepath.ToSlash(relPath)
+}
+
+func writeFakeEmbedder(t *testing.T, root string) {
+	t.Helper()
+	script := filepath.Join(root, "fake-embed.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+print(json.dumps({"embeddings": [{"id": item["id"], "vector": [1.0, 0.0]} for item in req["texts"]]}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
 }

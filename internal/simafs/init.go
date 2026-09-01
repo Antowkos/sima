@@ -20,6 +20,7 @@ var scaffoldDirs = []string{
 	"team/memory/archive",
 	"team/skills/active",
 	"team/skills/candidates",
+	"index",
 	"system/skills",
 	"system/prompts",
 }

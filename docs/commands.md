@@ -23,6 +23,7 @@ sima lint [path]
 
 ```bash
 sima brief "task description" [--path path]
+sima index rebuild [--path path]
 sima run --backend <name> --task "task description" [--path path] [--no-propose]
 sima learn --backend <name> --task "task description" [--archivist-backend name] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path path]
 ```
@@ -43,7 +44,13 @@ brief:
     min_score: 0.2
 ```
 
-The command receives JSON on stdin and returns embeddings on stdout:
+When embedding retrieval is enabled, SIMA maintains a persistent JSONL index at `.sima/index/embeddings.jsonl`. `sima apply` updates index rows for newly created, updated, superseded, or deprecated active knowledge. `sima brief` also refreshes stale/missing rows by comparing each active card/skill's metadata hash, so manual edits are picked up lazily. For existing projects or after bulk edits, run:
+
+```bash
+sima index rebuild --path .
+```
+
+The embedding command receives JSON on stdin and returns embeddings on stdout:
 
 ```json
 {"model":"intfloat/multilingual-e5-small","texts":[{"id":"__task__","text":"task"},{"id":".sima/personal/memory/cards/x.yaml","path":".sima/personal/memory/cards/x.yaml","text":"title trigger summary"}]}
