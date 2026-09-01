@@ -33,7 +33,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 			t.Fatalf("read %s: %v", rel, err)
 		}
 		text := string(data)
-		for _, want := range []string{managedBlockStart, "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "Do not learn: transient task progress", managedBlockEnd} {
+		for _, want := range []string{managedBlockStart, "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "GitHub issues", "Do not enable webhooks or automatic agent pickup from issues", "Do not learn: transient task progress", managedBlockEnd} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}
@@ -62,6 +62,13 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}
 		}
+	}
+	codexSIMA, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(".codex/skills/sima/SKILL.md")))
+	if err != nil {
+		t.Fatalf("read codex sima skill: %v", err)
+	}
+	if !strings.Contains(string(codexSIMA), "GitHub issues: create issues only when the user explicitly asks") {
+		t.Fatalf("codex sima skill missing GitHub issue safety instructions:\n%s", string(codexSIMA))
 	}
 }
 
