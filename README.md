@@ -126,7 +126,7 @@ If embedding retrieval is enabled in `.sima/config.yaml`, rebuild vectors for ex
 sima index rebuild --path .
 ```
 
-SIMA stores those vectors in `.sima/index/embeddings.jsonl`. New/updated learned cards refresh the index during `sima apply`; manual edits are detected by metadata hashes and refreshed lazily during `sima brief`. For E5-style embeddings the default `min_score` is `0.75`; raise/lower it per project if briefs are too broad or too sparse.
+SIMA stores those vectors in `.sima/index/embeddings.jsonl`. New/updated learned cards refresh the index during `sima apply`; manual edits are detected by metadata hashes and refreshed lazily during `sima brief`. For E5-style embeddings the default `min_score` is `0.85`; raise/lower it per project if briefs are too broad or too sparse.
 
 For explicit memory requests, agents should call:
 

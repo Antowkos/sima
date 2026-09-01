@@ -22,7 +22,7 @@ import (
 )
 
 const indexRelPath = ".sima/index/embeddings.jsonl"
-const defaultMinScore = 0.75
+const defaultMinScore = 0.85
 
 // Entry is one persisted embedding for active SIMA knowledge metadata.
 type Entry struct {

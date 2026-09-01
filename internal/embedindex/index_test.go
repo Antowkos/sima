@@ -79,7 +79,7 @@ for item in req["texts"]:
     elif "strong" in text:
         vec = [0.9, 0.4358898944]
     else:
-        vec = [0.7, 0.7141428429]
+        vec = [0.84, 0.5425863987]
     out.append({"id": ident, "vector": vec})
 print(json.dumps({"embeddings": out}))
 `), 0o755); err != nil {

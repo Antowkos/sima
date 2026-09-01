@@ -18,7 +18,7 @@ brief:
   embedding:
     command: ""
     model: intfloat/multilingual-e5-small
-    min_score: 0.75
+    min_score: 0.85
 backends: {}
 `
 
