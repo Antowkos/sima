@@ -64,6 +64,24 @@ sima setup --backend claude --env CLAUDE_CONFIG_DIR=$HOME/.claude-work
 
 Shell aliases such as `alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'` are convenient interactively, but SIMA runs backends with `exec`, so aliases are not expanded. Use `--claude-config-dir`, `--env`, or a real wrapper script path with `--executable`.
 
+## After upgrading SIMA
+
+When a project already has SIMA and you install a newer SIMA binary, refresh the project-local agent files before expecting agents to know about new features:
+
+```bash
+cd $PROJECT
+sima version
+sima install --client all --path .
+sima doctor .
+sima lint .
+```
+
+`sima install` refreshes SIMA-managed `CLAUDE.md`/`AGENTS.md` blocks, Claude slash commands, and Codex skills while preserving content outside managed blocks. Existing `.sima/config.yaml` values are not silently overwritten by new defaults; update config deliberately when release notes mention new settings. If embedding retrieval is enabled, or if memory/skill files were bulk/manual edited, also run:
+
+```bash
+sima index rebuild --path .
+```
+
 For one-command onboarding from the SIMA checkout, installation can optionally call setup after the binary is installed:
 
 ```bash

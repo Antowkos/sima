@@ -128,6 +128,19 @@ func managedInstructions(client string) string {
 
 SIMA is the project-local self-improvement memory harness for this repository.
 
+## After SIMA upgrades
+
+When the SIMA binary was upgraded, run this refresh sequence before relying on new agent-facing features:
+
+`+"```bash"+`
+sima version
+sima install --client all --path .
+sima doctor .
+sima lint .
+`+"```"+`
+
+This updates the managed SIMA blocks in `+"`"+`CLAUDE.md`+"`"+` and `+"`"+`AGENTS.md`+"`"+` plus Claude slash commands and Codex skills while preserving content outside managed blocks. Existing `+"`"+`.sima/config.yaml`+"`"+` values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run `+"`"+`sima index rebuild --path .`+"`"+`.
+
 ## Before starting a task
 
 1. Run `+"`"+`sima brief "<task>" --path .`+"`"+`.

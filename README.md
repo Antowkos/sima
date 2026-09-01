@@ -103,6 +103,23 @@ AGENTS.md                      # Codex/OpenAI agent project instructions
 
 Content outside the managed block is preserved. Re-running `sima setup` or `sima install` updates the SIMA block without replacing the rest of the file.
 
+### After upgrading SIMA
+
+After installing a newer SIMA binary, refresh existing projects so agents pick up new instructions, slash commands, and Codex skills:
+
+```bash
+sima version
+sima install --client all --path .
+sima doctor .
+sima lint .
+```
+
+This updates only SIMA-managed sections/files and preserves project-owned content. Existing `.sima/config.yaml` values are not silently overwritten by new defaults, so apply release-note config changes intentionally. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run:
+
+```bash
+sima index rebuild --path .
+```
+
 ### How to prompt Claude/Codex
 
 Use a prompt like:
