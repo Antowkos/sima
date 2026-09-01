@@ -221,6 +221,10 @@ sima skill list --status active --path .
 sima backend list .
 ```
 
+## License
+
+MIT License. See [LICENSE](LICENSE).
+
 ## Author
 
 Created by **Anton Kovalev**.
