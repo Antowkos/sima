@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antowkos/sima/internal/config"
 	"github.com/antowkos/sima/internal/simafs"
 )
 
@@ -63,16 +64,7 @@ func TestGenerateFiltersActiveMemoryByTaskRelevance(t *testing.T) {
 	if _, err := simafs.Init(root); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
-	cards := map[string]string{
-		"guard-before-return.yaml": "id: guard-before-return\nstatus: active\ntype: invariant\ntitle: Guard before return styleguide rule\ntrigger: When editing Swift functions with guard-else-return style\nsummary: Prefer an early guard check before returning optional values from Swift functions.\n",
-		"gh-deployment.yaml":       "id: gh-deployment\nstatus: active\ntype: workflow\ntitle: GH deployment workflow\ntrigger: When running the deployment workflow from GitHub CLI\nsummary: Use gh workflow run Run deployment with the target environment input.\n",
-		"android-core.yaml":        "id: android-core\nstatus: active\ntype: invariant\ntitle: Android core repo reference\ntrigger: When working with the Android sibling repository\nsummary: The sibling android-core repository lives in the adjacent checkout path.\n",
-	}
-	for name, content := range cards {
-		if err := os.WriteFile(filepath.Join(root, ".sima", "personal", "memory", "cards", name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	writeRetrievalTestCards(t, root)
 
 	result, err := Generate(root, Options{Task: "поправить guard-else-return в SupportConfig.swift", Now: time.Date(2026, 9, 1, 14, 0, 0, 0, time.UTC)})
 	if err != nil {
@@ -86,6 +78,93 @@ func TestGenerateFiltersActiveMemoryByTaskRelevance(t *testing.T) {
 	for _, unwanted := range []string{"gh-deployment.yaml", "GH deployment workflow", "android-core.yaml", "Android core repo reference"} {
 		if strings.Contains(result.Content, unwanted) {
 			t.Fatalf("brief included irrelevant memory %q:\n%s", unwanted, result.Content)
+		}
+	}
+}
+
+func TestGenerateCanUseExternalEmbeddingRetriever(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	writeRetrievalTestCards(t, root)
+	script := filepath.Join(root, "fake-embed.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+items = []
+for item in req["texts"]:
+    text = (item.get("text", "") + " " + item.get("path", "")).lower()
+    if item["id"] == "__task__":
+        vec = [1.0, 0.0]
+    elif "android" in text:
+        vec = [0.95, 0.0]
+    elif "guard" in text:
+        vec = [0.70, 0.0]
+    else:
+        vec = [0.0, 1.0]
+    items.append({"id": item["id"], "vector": vec})
+print(json.dumps({"embeddings": items}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Brief = config.Brief{Retrieval: "embedding", MaxSelected: 1, Embedding: config.BriefEmbedding{Command: "./fake-embed.py", Model: "intfloat/multilingual-e5-small", MinScore: 0.1}}
+	cfg.LearnConfigured = true
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{Task: "поправить guard-else-return в SupportConfig.swift", Now: time.Date(2026, 9, 1, 15, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if !strings.Contains(result.Content, "android-core.yaml") {
+		t.Fatalf("embedding scorer top result was not used:\n%s", result.Content)
+	}
+	if strings.Contains(result.Content, "guard-before-return.yaml") || strings.Contains(result.Content, "gh-deployment.yaml") {
+		t.Fatalf("embedding max_selected=1 should include only top scorer:\n%s", result.Content)
+	}
+}
+
+func TestGenerateFallsBackToLexicalWhenEmbeddingFails(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	writeRetrievalTestCards(t, root)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Brief = config.Brief{Retrieval: "hybrid", Embedding: config.BriefEmbedding{Command: "./missing-embedder"}}
+	cfg.LearnConfigured = true
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{Task: "поправить guard-else-return в SupportConfig.swift", Now: time.Date(2026, 9, 1, 16, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if !strings.Contains(result.Content, "guard-before-return.yaml") || strings.Contains(result.Content, "android-core.yaml") {
+		t.Fatalf("hybrid fallback should use lexical relevance:\n%s", result.Content)
+	}
+}
+
+func writeRetrievalTestCards(t *testing.T, root string) {
+	t.Helper()
+	cards := map[string]string{
+		"guard-before-return.yaml": "id: guard-before-return\nstatus: active\ntype: invariant\ntitle: Guard before return styleguide rule\ntrigger: When editing Swift functions with guard-else-return style\nsummary: Prefer an early guard check before returning optional values from Swift functions.\n",
+		"gh-deployment.yaml":       "id: gh-deployment\nstatus: active\ntype: workflow\ntitle: GH deployment workflow\ntrigger: When running the deployment workflow from GitHub CLI\nsummary: Use gh workflow run Run deployment with the target environment input.\n",
+		"android-core.yaml":        "id: android-core\nstatus: active\ntype: invariant\ntitle: Android core repo reference\ntrigger: When working with the Android sibling repository\nsummary: The sibling android-core repository lives in the adjacent checkout path.\n",
+	}
+	for name, content := range cards {
+		if err := os.WriteFile(filepath.Join(root, ".sima", "personal", "memory", "cards", name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

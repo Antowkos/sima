@@ -40,7 +40,9 @@ The v0 brief includes:
 - SDD artifact paths under `docs/specs`, `docs/plans`, and `openspec/changes`;
 - safety policy reminders for reward-hacking prevention and clean-session archivist review.
 
-Brief content is bounded: active memory/skill snippets are filtered by task relevance, truncated, and limited by item count so briefings stay token-sparse while still surfacing learned knowledge. v0 uses a deterministic lexical heuristic over path/title/trigger/summary tokens instead of dumping every active item. This is deliberately simple and dependency-free for alpha, but it is a known limitation: a model/embedding-based relevance scorer should replace or augment the heuristic so semantically relevant knowledge can be retrieved without exact token overlap. Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
+Brief content is bounded: active memory/skill snippets are filtered by task relevance, truncated, and limited by item count so briefings stay token-sparse while still surfacing learned knowledge. The default v0 path uses a deterministic lexical heuristic over path/title/trigger/summary tokens instead of dumping every active item. Projects can opt into an external embedding scorer with `brief.retrieval: embedding` or `hybrid` plus `brief.embedding.command`; the command receives compact metadata only, not full evidence bundles. SIMA invokes the configured command on demand for each brief and does not keep the model resident in memory unless the command itself is a client for a long-running daemon/server. `hybrid`/embedding failures fall back to the lexical heuristic. Briefs are input artifacts for future `sima run` and should be preserved in run evidence.
+
+The reference optional model is `intfloat/multilingual-e5-small`, which works for mixed Russian/English project text. The included helper `scripts/sima-embed-e5.py` uses `sentence-transformers` and exits after producing vectors; users who want lower latency can point `brief.embedding.command` at their own local embedding server wrapper instead.
 
 ## Backend profiles
 

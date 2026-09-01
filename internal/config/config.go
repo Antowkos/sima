@@ -15,6 +15,7 @@ type Config struct {
 	Project  Project                   `yaml:"project"`
 	Policy   Policy                    `yaml:"policy"`
 	Learn    Learn                     `yaml:"learn"`
+	Brief    Brief                     `yaml:"brief,omitempty"`
 	Team     Team                      `yaml:"team,omitempty"`
 	Backends map[string]BackendProfile `yaml:"backends"`
 
@@ -36,6 +37,18 @@ type Policy struct {
 type Learn struct {
 	AutoApply           bool `yaml:"auto_apply"`
 	AutoCleanupDeferred bool `yaml:"auto_cleanup_deferred"`
+}
+
+type Brief struct {
+	Retrieval   string         `yaml:"retrieval,omitempty"`
+	MaxSelected int            `yaml:"max_selected,omitempty"`
+	Embedding   BriefEmbedding `yaml:"embedding,omitempty"`
+}
+
+type BriefEmbedding struct {
+	Command  string  `yaml:"command,omitempty"`
+	Model    string  `yaml:"model,omitempty"`
+	MinScore float64 `yaml:"min_score,omitempty"`
 }
 
 type Team struct {

@@ -27,9 +27,31 @@ sima run --backend <name> --task "task description" [--path path] [--no-propose]
 sima learn --backend <name> --task "task description" [--archivist-backend name] [--auto-apply|--no-auto-apply] [--auto-cleanup-deferred|--no-auto-cleanup-deferred] [--json] [--path path]
 ```
 
-- `brief` emits a compact sourced context packet from active memory and skills. It filters active knowledge with a deterministic lexical task-relevance heuristic in v0; model/embedding relevance scoring is a known future improvement.
+- `brief` emits a compact sourced context packet from active memory and skills. By default it filters active knowledge with a deterministic lexical task-relevance heuristic. Projects can opt into embedding retrieval by setting `brief.retrieval: embedding` or `hybrid` and providing `brief.embedding.command`; SIMA invokes that external command per brief and does not keep the model resident unless the configured command talks to a daemon.
 - `run` executes a backend with the SIMA briefing and captures evidence.
 - `learn` runs the worker, parses structured learning proposals, runs clean-session archivist review, and auto-applies safe personal/local knowledge when configured.
+
+Optional embedding retriever contract:
+
+```yaml
+brief:
+  retrieval: hybrid # lexical | embedding | hybrid
+  max_selected: 8
+  embedding:
+    command: ./scripts/sima-embed-e5.py
+    model: intfloat/multilingual-e5-small
+    min_score: 0.2
+```
+
+The command receives JSON on stdin and returns embeddings on stdout:
+
+```json
+{"model":"intfloat/multilingual-e5-small","texts":[{"id":"__task__","text":"task"},{"id":".sima/personal/memory/cards/x.yaml","path":".sima/personal/memory/cards/x.yaml","text":"title trigger summary"}]}
+```
+
+```json
+{"embeddings":[{"id":"__task__","vector":[0.1,0.2]},{"id":".sima/personal/memory/cards/x.yaml","vector":[0.1,0.2]}]}
+```
 
 ## Explicit memory
 

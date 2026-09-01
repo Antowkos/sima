@@ -1,14 +1,21 @@
 package brief
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/antowkos/sima/internal/config"
 )
 
 const (
@@ -40,23 +47,31 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 	}
 
 	simaRoot := filepath.Join(projectRoot, ".sima")
+	briefCfg := config.Brief{Retrieval: "lexical"}
+	if cfg, err := config.Load(projectRoot); err == nil {
+		briefCfg = cfg.Brief
+		if briefCfg.Retrieval == "" {
+			briefCfg.Retrieval = "lexical"
+		}
+	}
 	briefDir := filepath.Join(simaRoot, "personal", "briefs")
 	if err := os.MkdirAll(briefDir, 0o755); err != nil {
 		return Result{}, err
 	}
 
+	personalMemory := readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task, briefCfg)
+	personalSkills := readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}, opts.Task, briefCfg)
+	teamMemory := readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task, briefCfg)
+	teamSkills := readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}, opts.Task, briefCfg)
+
 	data := data{
 		Task:                   opts.Task,
 		GeneratedAt:            opts.Now.UTC().Format(time.RFC3339),
 		SystemSkills:           listFiles(filepath.Join(simaRoot, "system", "skills"), projectRoot, []string{".md"}),
-		PersonalMemory:         listRelevantActiveFiles(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
-		PersonalMemorySnippets: readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
-		PersonalSkills:         listRelevantActiveFiles(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
-		PersonalSkillSnippets:  readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
-		TeamMemory:             listRelevantActiveFiles(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
-		TeamMemorySnippets:     readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
-		TeamSkills:             listRelevantActiveFiles(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
-		TeamSkillSnippets:      readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
+		PersonalMemorySnippets: personalMemory,
+		PersonalSkillSnippets:  personalSkills,
+		TeamMemorySnippets:     teamMemory,
+		TeamSkillSnippets:      teamSkills,
 		SDDArtifacts:           findSDDArtifacts(projectRoot),
 	}
 	content := render(data)
@@ -179,8 +194,11 @@ func readActiveSnippets(root, projectRoot string, exts []string) []snippet {
 	return snippetsForPaths(projectRoot, paths)
 }
 
-func listRelevantActiveFiles(root, projectRoot string, exts []string, task string) []string {
+func listRelevantActiveFiles(root, projectRoot string, exts []string, task string, cfg config.Brief) []string {
 	paths := listActiveFiles(root, projectRoot, exts)
+	if selected, ok := embeddingRelevantActiveFiles(projectRoot, paths, task, cfg); ok {
+		return selected
+	}
 	relevant := paths[:0]
 	for _, relPath := range paths {
 		abs := filepath.Join(projectRoot, filepath.FromSlash(relPath))
@@ -195,8 +213,8 @@ func listRelevantActiveFiles(root, projectRoot string, exts []string, task strin
 	return relevant
 }
 
-func readRelevantActiveSnippets(root, projectRoot string, exts []string, task string) []snippet {
-	paths := listRelevantActiveFiles(root, projectRoot, exts, task)
+func readRelevantActiveSnippets(root, projectRoot string, exts []string, task string, cfg config.Brief) []snippet {
+	paths := listRelevantActiveFiles(root, projectRoot, exts, task, cfg)
 	return snippetsForPaths(projectRoot, paths)
 }
 
@@ -221,11 +239,11 @@ func snippetsForPaths(projectRoot string, paths []string) []snippet {
 }
 
 func relevantToTask(task, relPath, content string) bool {
-	// Alpha retrieval is intentionally deterministic and dependency-free: match
-	// task tokens against path/title/trigger/summary tokens. This prevents whole
-	// active-memory dumps, but it is still a lexical heuristic. A future retriever
-	// should use a model/embedding scorer so semantically relevant knowledge can
-	// be selected even without exact token overlap.
+	// Alpha lexical fallback is intentionally deterministic and dependency-free:
+	// match task tokens against path/title/trigger/summary tokens. This prevents
+	// whole active-memory dumps. Projects can opt into embedding retrieval through
+	// brief.embedding.command; SIMA invokes that command per brief and does not
+	// keep the model resident unless the configured command talks to a daemon.
 	taskTokens := meaningfulTokens(task)
 	if len(taskTokens) == 0 {
 		return false
@@ -237,6 +255,129 @@ func relevantToTask(task, relPath, content string) bool {
 		}
 	}
 	return false
+}
+
+type embeddingRequest struct {
+	Model string          `json:"model,omitempty"`
+	Texts []embeddingText `json:"texts"`
+}
+
+type embeddingText struct {
+	ID   string `json:"id"`
+	Path string `json:"path,omitempty"`
+	Text string `json:"text"`
+}
+
+type embeddingResponse struct {
+	Embeddings []embeddingVector `json:"embeddings"`
+}
+
+type embeddingVector struct {
+	ID     string    `json:"id"`
+	Vector []float64 `json:"vector"`
+}
+
+func embeddingRelevantActiveFiles(projectRoot string, paths []string, task string, cfg config.Brief) ([]string, bool) {
+	retrieval := strings.ToLower(strings.TrimSpace(cfg.Retrieval))
+	if retrieval != "embedding" && retrieval != "hybrid" {
+		return nil, false
+	}
+	command := strings.TrimSpace(cfg.Embedding.Command)
+	if command == "" || len(paths) == 0 {
+		return nil, false
+	}
+	texts := []embeddingText{{ID: "__task__", Text: task}}
+	for _, relPath := range paths {
+		abs := filepath.Join(projectRoot, filepath.FromSlash(relPath))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		texts = append(texts, embeddingText{ID: relPath, Path: relPath, Text: relevanceText(string(data))})
+	}
+	vectors, err := runEmbeddingCommand(projectRoot, command, cfg.Embedding.Model, texts)
+	if err != nil {
+		return nil, false
+	}
+	taskVec, ok := vectors["__task__"]
+	if !ok || len(taskVec) == 0 {
+		return nil, false
+	}
+	maxSelected := cfg.MaxSelected
+	if maxSelected <= 0 || maxSelected > maxSnippetItems {
+		maxSelected = maxSnippetItems
+	}
+	minScore := cfg.Embedding.MinScore
+	if minScore == 0 {
+		minScore = 0.20
+	}
+	type scored struct {
+		path  string
+		score float64
+	}
+	var scoredItems []scored
+	for _, relPath := range paths {
+		vec, ok := vectors[relPath]
+		if !ok {
+			continue
+		}
+		score := cosine(taskVec, vec)
+		if score >= minScore {
+			scoredItems = append(scoredItems, scored{path: relPath, score: score})
+		}
+	}
+	sort.SliceStable(scoredItems, func(i, j int) bool { return scoredItems[i].score > scoredItems[j].score })
+	if len(scoredItems) > maxSelected {
+		scoredItems = scoredItems[:maxSelected]
+	}
+	selected := make([]string, 0, len(scoredItems))
+	for _, item := range scoredItems {
+		selected = append(selected, item.path)
+	}
+	return selected, len(selected) > 0
+}
+
+func runEmbeddingCommand(projectRoot, command, model string, texts []embeddingText) (map[string][]float64, error) {
+	payload, err := json.Marshal(embeddingRequest{Model: model, Texts: texts})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = projectRoot
+	cmd.Stdin = bytes.NewReader(payload)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var response embeddingResponse
+	if err := json.Unmarshal(bytes.TrimSpace(out), &response); err != nil {
+		return nil, err
+	}
+	vectors := map[string][]float64{}
+	for _, item := range response.Embeddings {
+		if item.ID != "" && len(item.Vector) > 0 {
+			vectors[item.ID] = item.Vector
+		}
+	}
+	return vectors, nil
+}
+
+func cosine(a, b []float64) float64 {
+	if len(a) == 0 || len(a) != len(b) {
+		return -1
+	}
+	var dot, aa, bb float64
+	for i := range a {
+		dot += a[i] * b[i]
+		aa += a[i] * a[i]
+		bb += b[i] * b[i]
+	}
+	if aa == 0 || bb == 0 {
+		return -1
+	}
+	return dot / (math.Sqrt(aa) * math.Sqrt(bb))
 }
 
 func relevanceText(content string) string {

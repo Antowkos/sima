@@ -12,6 +12,13 @@ policy:
 learn:
   auto_apply: true
   auto_cleanup_deferred: true
+brief:
+  retrieval: lexical
+  max_selected: 8
+  embedding:
+    command: ""
+    model: intfloat/multilingual-e5-small
+    min_score: 0.2
 backends: {}
 `
 
