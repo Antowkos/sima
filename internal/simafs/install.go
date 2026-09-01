@@ -143,9 +143,10 @@ This updates the managed SIMA blocks in `+"`"+`CLAUDE.md`+"`"+` and `+"`"+`AGENT
 
 ## Before starting a task
 
-1. Run `+"`"+`sima brief "<task>" --path .`+"`"+`.
-2. Read the generated brief and use only active SIMA memory/skills plus the current repository as context.
-3. Do not paste raw logs, secrets, credentials, or unrelated history into memory.
+1. Preserve the user's intent, but when you formulate the task string for SIMA, keep separable intents as clear clauses divided by `+"`"+`и`+"`"+`, `+"`"+`and`+"`"+`, commas, or semicolons. Example: `+"`"+`fix guard-else-return in SupportConfig.swift, open PR with the repo template`+"`"+`. This helps deterministic query decomposition split multi-topic tasks before embedding retrieval.
+2. Run `+"`"+`sima brief "<task>" --path .`+"`"+` using that clear task string.
+3. Read the generated brief and use only active SIMA memory/skills plus the current repository as context.
+4. Do not paste raw logs, secrets, credentials, or unrelated history into memory.
 
 If embedding retrieval is enabled and the project has existing or bulk-edited knowledge, run sima index rebuild --path . to refresh .sima/index/embeddings.jsonl. Normal sima apply updates affected embeddings automatically, and sima brief lazily refreshes stale edited cards by metadata hash.
 
@@ -237,12 +238,13 @@ $ARGUMENTS
 Run the SIMA project-memory flow without requiring the user to mention SIMA again.
 
 1. If $ARGUMENTS is empty, ask the user for the task and stop.
-2. Run: sima brief "$ARGUMENTS" --path .
-3. If embedding retrieval is configured and existing/bulk-edited knowledge lacks vectors, run: sima index rebuild --path .
-4. Read the brief and use active SIMA memory/skills plus the current repository as context.
-5. Do the normal repository workflow for the task: inspect files, use git/gh when relevant, edit files, and run real verification.
-6. Preserve evidence: changed files, test/build output, important decisions, and blockers.
-7. After successful bounded work, run: sima learn --backend <backend-name> --task "$ARGUMENTS" --path .
+2. Preserve the user's intent, but when you formulate the task string for SIMA, keep separable intents as clear clauses divided by и, and, commas, or semicolons. Example: fix guard-else-return in SupportConfig.swift, open PR with the repo template. This helps deterministic query decomposition split multi-topic tasks before embedding retrieval.
+3. Run: sima brief "$ARGUMENTS" --path .
+4. If embedding retrieval is configured and existing/bulk-edited knowledge lacks vectors, run: sima index rebuild --path .
+5. Read the brief and use active SIMA memory/skills plus the current repository as context.
+6. Do the normal repository workflow for the task: inspect files, use git/gh when relevant, edit files, and run real verification.
+7. Preserve evidence: changed files, test/build output, important decisions, and blockers.
+8. After successful bounded work, run: sima learn --backend <backend-name> --task "$ARGUMENTS" --path .
 
 Use the backend configured for this project. If no backend is obvious, run sima backend list . and pick the configured Claude/Codex profile. If no backend exists, tell the user exactly what is missing and do not fake learning.
 
@@ -263,6 +265,8 @@ The user invoked /sima-brief with this task:
 $ARGUMENTS
 
 If $ARGUMENTS is empty, ask the user for the task and stop.
+
+When you formulate the task string for SIMA, keep separable intents as clear clauses divided by и, and, commas, or semicolons so deterministic query decomposition can split multi-topic tasks before embedding retrieval.
 
 Run: sima brief "$ARGUMENTS" --path .
 

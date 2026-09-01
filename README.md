@@ -140,6 +140,8 @@ sima brief "<task>" --path .
 sima learn --backend <backend-name> --task "<task>" --path .
 ```
 
+When an agent formulates `<task>`, it should preserve the user's intent but keep separable intents as clear clauses divided by `и`, `and`, commas, or semicolons. Example: `fix guard-else-return in SupportConfig.swift, open PR with the repo template`. This helps deterministic query decomposition split multi-topic tasks before embedding retrieval.
+
 If embedding retrieval is enabled in `.sima/config.yaml`, rebuild vectors for existing or bulk-edited knowledge with:
 
 ```bash

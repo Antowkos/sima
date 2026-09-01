@@ -52,6 +52,8 @@ When embedding retrieval is enabled, SIMA maintains a persistent JSONL index at 
 
 `brief.query.decomposition` can improve multi-topic tasks whose single embedding gets diluted across intents. `none` embeds the original task only. `heuristic` adds conservative local splits on conjunctions/punctuation. `command` calls an external splitter, which can be backed by a local or hosted model, and unions matches from the original task plus returned sub-queries. Splitter failures fall back to the original task only.
 
+Agents should preserve user intent but phrase SIMA task strings with clear separators when a request contains multiple intents. For example, prefer `fix guard-else-return in SupportConfig.swift, open PR with the repo template` over a dense paragraph. This keeps the deterministic splitter useful even when no model-backed splitter is configured.
+
 The query decomposition command receives JSON on stdin and returns sub-queries on stdout:
 
 ```json

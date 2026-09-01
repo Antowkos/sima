@@ -42,12 +42,13 @@ Use this skill when the user invokes /sima <task> or asks to run work through SI
 After SIMA upgrades: before relying on new agent-facing features, run sima version, sima install --client all --path ., sima doctor ., and sima lint . before proceeding. This refreshes managed CLAUDE.md/AGENTS.md blocks, Claude slash commands, and Codex skills without overwriting content outside managed blocks. Existing .sima/config.yaml values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. For example, old E5 configs may still have brief.embedding.min_score: 0.2; update them to the current recommendation, min_score: 0.85, if unrelated cards should be filtered rather than only reranked. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run sima index rebuild --path .
 
 1. Treat the user's message after /sima as the task. If no task is provided, ask for it and stop.
-2. Run: sima brief "<task>" --path .
-3. If embedding retrieval is configured and existing/bulk-edited knowledge lacks vectors, run: sima index rebuild --path .
-4. Read the brief and use active SIMA memory/skills plus the current repository as context.
-5. Do the normal repository workflow: inspect files, use git/gh when relevant, edit files, and run real verification.
-6. Preserve evidence: changed files, test/build output, important decisions, and blockers.
-7. After successful bounded work, run: sima learn --backend <backend-name> --task "<task>" --path .
+2. Preserve the user's intent, but when you formulate the task string for SIMA, keep separable intents as clear clauses divided by и, and, commas, or semicolons. Example: fix guard-else-return in SupportConfig.swift, open PR with the repo template. This helps deterministic query decomposition split multi-topic tasks before embedding retrieval.
+3. Run: sima brief "<task>" --path .
+4. If embedding retrieval is configured and existing/bulk-edited knowledge lacks vectors, run: sima index rebuild --path .
+5. Read the brief and use active SIMA memory/skills plus the current repository as context.
+6. Do the normal repository workflow: inspect files, use git/gh when relevant, edit files, and run real verification.
+7. Preserve evidence: changed files, test/build output, important decisions, and blockers.
+8. After successful bounded work, run: sima learn --backend <backend-name> --task "<task>" --path .
 
 Use the backend configured for this project. If no backend is obvious, run sima backend list . and pick the configured Claude/Codex profile. If no backend exists, tell the user exactly what is missing and do not fake learning.
 
@@ -67,10 +68,11 @@ description: Use when the user invokes /sima-brief or asks for a SIMA project-me
 Use this skill when the user invokes /sima-brief <task> or asks for a SIMA briefing.
 
 1. Treat the user's message after /sima-brief as the task. If no task is provided, ask for it and stop.
-2. Run: sima brief "<task>" --path .
-3. If the user asks to refresh embeddings, or if embedding retrieval was just enabled for existing cards, run: sima index rebuild --path .
-4. Summarize only the briefing sections that matter for the task.
-5. Do not paste unrelated raw history into the conversation.`
+2. Preserve the user's intent, but formulate multi-topic tasks as clear clauses divided by и, and, commas, or semicolons so deterministic query decomposition can split them before embedding retrieval.
+3. Run: sima brief "<task>" --path .
+4. If the user asks to refresh embeddings, or if embedding retrieval was just enabled for existing cards, run: sima index rebuild --path .
+5. Summarize only the briefing sections that matter for the task.
+6. Do not paste unrelated raw history into the conversation.`
 }
 
 func codexSIMARememberSkill() string {

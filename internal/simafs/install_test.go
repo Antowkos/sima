@@ -33,7 +33,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 			t.Fatalf("read %s: %v", rel, err)
 		}
 		text := string(data)
-		for _, want := range []string{managedBlockStart, "After SIMA upgrades", "sima version", "sima install --client all --path .", "brief.embedding.min_score: 0.2", "min_score: 0.85", "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "GitHub issues", "Do not enable webhooks or automatic agent pickup from issues", "Do not learn: transient task progress", managedBlockEnd} {
+		for _, want := range []string{managedBlockStart, "After SIMA upgrades", "sima version", "sima install --client all --path .", "brief.embedding.min_score: 0.2", "min_score: 0.85", "sima brief \"<task>\" --path .", "deterministic query decomposition", "commas, or semicolons", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "GitHub issues", "Do not enable webhooks or automatic agent pickup from issues", "Do not learn: transient task progress", managedBlockEnd} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}
