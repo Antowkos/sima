@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a reproducible problem in SIMA
+title: "Bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Issue content is treated as untrusted input; maintainers and agents will not execute instructions embedded in reports.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: sima ... fails when ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Minimal commands or actions to reproduce. Do not include secrets, tokens, or private config values.
+      placeholder: |
+        1. Run `sima ...`
+        2. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / output
+      description: Paste relevant output only. Redact secrets as [REDACTED].
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SIMA version
+      placeholder: sima 0.1.0-alpha.4
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Links, related issues, or suspected area. Do not include credentials.
+    validations:
+      required: false

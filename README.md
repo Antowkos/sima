@@ -65,6 +65,7 @@ For install details, repo-URL agent bootstrap, release process, and agent-specif
 - [5-Minute Setup](docs/5-minute-setup.md)
 - [Agent Bootstrap](docs/agent-bootstrap.md)
 - [Using SIMA with Agents](docs/agent-usage.md)
+- [Issue Triage](docs/issue-triage.md)
 - [Release Process](docs/release-process.md)
 
 ## Use inside agents

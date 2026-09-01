@@ -1,0 +1,23 @@
+name: Question
+description: Ask a question about SIMA usage or behavior
+title: "Question: "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions are welcome. Please avoid pasting secrets, tokens, private logs, or unrelated prompt text.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to understand?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Relevant SIMA command, version, repo setup, or docs page.
+    validations:
+      required: false
