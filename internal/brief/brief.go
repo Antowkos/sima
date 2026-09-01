@@ -49,14 +49,14 @@ func Generate(projectRoot string, opts Options) (Result, error) {
 		Task:                   opts.Task,
 		GeneratedAt:            opts.Now.UTC().Format(time.RFC3339),
 		SystemSkills:           listFiles(filepath.Join(simaRoot, "system", "skills"), projectRoot, []string{".md"}),
-		PersonalMemory:         listActiveFiles(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		PersonalMemorySnippets: readActiveSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		PersonalSkills:         listActiveFiles(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
-		PersonalSkillSnippets:  readActiveSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}),
-		TeamMemory:             listActiveFiles(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		TeamMemorySnippets:     readActiveSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}),
-		TeamSkills:             listActiveFiles(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
-		TeamSkillSnippets:      readActiveSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}),
+		PersonalMemory:         listRelevantActiveFiles(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
+		PersonalMemorySnippets: readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
+		PersonalSkills:         listRelevantActiveFiles(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
+		PersonalSkillSnippets:  readRelevantActiveSnippets(filepath.Join(simaRoot, "personal", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
+		TeamMemory:             listRelevantActiveFiles(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
+		TeamMemorySnippets:     readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "memory", "cards"), projectRoot, []string{".yaml", ".yml", ".md"}, opts.Task),
+		TeamSkills:             listRelevantActiveFiles(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
+		TeamSkillSnippets:      readRelevantActiveSnippets(filepath.Join(simaRoot, "team", "skills", "active"), projectRoot, []string{".md"}, opts.Task),
 		SDDArtifacts:           findSDDArtifacts(projectRoot),
 	}
 	content := render(data)
@@ -176,6 +176,31 @@ func readSnippets(root, projectRoot string, exts []string) []snippet {
 
 func readActiveSnippets(root, projectRoot string, exts []string) []snippet {
 	paths := listActiveFiles(root, projectRoot, exts)
+	return snippetsForPaths(projectRoot, paths)
+}
+
+func listRelevantActiveFiles(root, projectRoot string, exts []string, task string) []string {
+	paths := listActiveFiles(root, projectRoot, exts)
+	relevant := paths[:0]
+	for _, relPath := range paths {
+		abs := filepath.Join(projectRoot, filepath.FromSlash(relPath))
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		if relevantToTask(task, relPath, string(data)) {
+			relevant = append(relevant, relPath)
+		}
+	}
+	return relevant
+}
+
+func readRelevantActiveSnippets(root, projectRoot string, exts []string, task string) []snippet {
+	paths := listRelevantActiveFiles(root, projectRoot, exts, task)
+	return snippetsForPaths(projectRoot, paths)
+}
+
+func snippetsForPaths(projectRoot string, paths []string) []snippet {
 	if len(paths) > maxSnippetItems {
 		paths = paths[:maxSnippetItems]
 	}
@@ -193,6 +218,61 @@ func readActiveSnippets(root, projectRoot string, exts []string) []snippet {
 		items = append(items, snippet{Path: relPath, Content: content})
 	}
 	return items
+}
+
+func relevantToTask(task, relPath, content string) bool {
+	taskTokens := meaningfulTokens(task)
+	if len(taskTokens) == 0 {
+		return false
+	}
+	candidate := relPath + "\n" + relevanceText(content)
+	for token := range meaningfulTokens(candidate) {
+		if taskTokens[token] {
+			return true
+		}
+	}
+	return false
+}
+
+func relevanceText(content string) string {
+	var meta struct {
+		ID      string `yaml:"id"`
+		Type    string `yaml:"type"`
+		Title   string `yaml:"title"`
+		Trigger string `yaml:"trigger"`
+		Summary string `yaml:"summary"`
+		Status  string `yaml:"status"`
+	}
+	if err := yaml.Unmarshal([]byte(content), &meta); err == nil && (meta.Title != "" || meta.Trigger != "" || meta.Summary != "") {
+		return strings.Join([]string{meta.ID, meta.Type, meta.Title, meta.Trigger, meta.Summary, meta.Status}, "\n")
+	}
+	return content
+}
+
+func meaningfulTokens(text string) map[string]bool {
+	tokens := make(map[string]bool)
+	for _, field := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r >= 'а' && r <= 'я' || r == 'ё')
+	}) {
+		field = strings.TrimSpace(field)
+		if len([]rune(field)) < 3 || stopToken(field) {
+			continue
+		}
+		tokens[field] = true
+		if strings.HasSuffix(field, "ing") && len(field) > 5 {
+			tokens[strings.TrimSuffix(field, "ing")] = true
+		}
+	}
+	return tokens
+}
+
+func stopToken(token string) bool {
+	switch token {
+	case "when", "while", "before", "after", "during", "this", "that", "with", "from", "into", "project", "repo", "task", "work", "working", "active", "memory", "skill", "sima", "brief", "user", "source", "status", "title", "trigger", "summary", "type", "kind", "the", "and", "for", "или", "для", "при", "про", "это", "как", "что", "когда", "если", "надо", "нужно", "проект", "репо", "задача", "память", "скил", "активный":
+		return true
+	default:
+		return false
+	}
 }
 
 func activeKnowledgeFile(path string) bool {
