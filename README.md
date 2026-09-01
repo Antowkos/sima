@@ -16,21 +16,23 @@ SIMA is not a replacement for normal coding workflows. Agents still inspect repo
 
 ### From the latest GitHub Release
 
-For the current private alpha repo, use authenticated GitHub CLI access:
+Use GitHub CLI access:
 
 ```bash
 mkdir -p /tmp/sima-install
 cd /tmp/sima-install
 
-gh release download v0.1.0-alpha.1 \
+gh release download v0.1.0-alpha.2 \
   --repo Antowkos/sima \
-  --pattern 'sima_0.1.0-alpha.1_darwin_arm64.tar.gz'
+  --pattern 'sima_0.1.0-alpha.2_darwin_arm64.tar.gz'
 
-tar -xzf sima_0.1.0-alpha.1_darwin_arm64.tar.gz
-install -m 0755 sima_0.1.0-alpha.1_darwin_arm64/sima ~/.local/bin/sima
+tar -xzf sima_0.1.0-alpha.2_darwin_arm64.tar.gz
+install -m 0755 sima_0.1.0-alpha.2_darwin_arm64/sima ~/.local/bin/sima
 
 sima version
 ```
+
+Features currently on `main` but not yet tagged are available by building from source until the next release.
 
 Pick the matching archive for your platform:
 
@@ -117,6 +119,14 @@ sima brief "<task>" --path .
 # inspect repo, edit files, run tests/builds normally
 sima learn --backend <backend-name> --task "<task>" --path .
 ```
+
+If embedding retrieval is enabled in `.sima/config.yaml`, rebuild vectors for existing or bulk-edited knowledge with:
+
+```bash
+sima index rebuild --path .
+```
+
+SIMA stores those vectors in `.sima/index/embeddings.jsonl`. New/updated learned cards refresh the index during `sima apply`; manual edits are detected by metadata hashes and refreshed lazily during `sima brief`.
 
 For explicit memory requests, agents should call:
 
@@ -213,6 +223,7 @@ sima setup
 sima doctor .
 sima lint .
 sima brief "task" --path .
+sima index rebuild --path .
 sima learn --backend <name> --task "task" --path .
 sima remember "knowledge" --source user --type invariant --trigger "When ..." --path .
 sima candidates list --status all --path .

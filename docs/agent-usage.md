@@ -56,11 +56,12 @@ The installed Claude/Codex block tells the agent to:
 
 1. run `sima brief "<task>" --path .` before starting meaningful work;
 2. use active SIMA memory/skills plus the current repository as context;
-3. keep raw logs, secrets, credentials, and unrelated history out of memory;
-4. preserve evidence: tests, build output, changed files, decisions;
-5. route explicit “remember/save/learn/record this” requests through `sima remember`;
-6. use `sima learn` after successful bounded work so durable lessons can be proposed and reviewed;
-7. avoid learning transient task progress, raw run summaries, PR numbers, tokens, credentials, or stale TODOs.
+3. run `sima index rebuild --path .` when embedding retrieval is enabled for existing/bulk-edited knowledge;
+4. keep raw logs, secrets, credentials, and unrelated history out of memory;
+5. preserve evidence: tests, build output, changed files, decisions;
+6. route explicit “remember/save/learn/record this” requests through `sima remember`;
+7. use `sima learn` after successful bounded work so durable lessons can be proposed and reviewed;
+8. avoid learning transient task progress, raw run summaries, PR numbers, tokens, credentials, or stale TODOs.
 
 ## How to use SIMA in Claude Code
 
@@ -92,6 +93,8 @@ Typical Claude-side commands:
 
 ```bash
 sima brief "<task>" --path .
+# optional after enabling embedding retrieval or bulk-editing cards
+sima index rebuild --path .
 # inspect repo, edit files, run tests/builds normally
 sima learn --backend claude-main --task "<task>" --path .
 ```
@@ -146,6 +149,8 @@ Typical Codex-side commands:
 
 ```bash
 sima brief "<task>" --path .
+# optional after enabling embedding retrieval or bulk-editing cards
+sima index rebuild --path .
 # inspect repo, edit files, run tests/builds normally
 sima learn --backend codex-main --task "<task>" --path .
 ```

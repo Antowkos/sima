@@ -33,7 +33,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 			t.Fatalf("read %s: %v", rel, err)
 		}
 		text := string(data)
-		for _, want := range []string{managedBlockStart, "sima brief \"<task>\" --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "Do not learn: transient task progress", managedBlockEnd} {
+		for _, want := range []string{managedBlockStart, "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "Do not learn: transient task progress", managedBlockEnd} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}

@@ -41,10 +41,11 @@ Use this skill when the user invokes /sima <task> or asks to run work through SI
 
 1. Treat the user's message after /sima as the task. If no task is provided, ask for it and stop.
 2. Run: sima brief "<task>" --path .
-3. Read the brief and use active SIMA memory/skills plus the current repository as context.
-4. Do the normal repository workflow: inspect files, use git/gh when relevant, edit files, and run real verification.
-5. Preserve evidence: changed files, test/build output, important decisions, and blockers.
-6. After successful bounded work, run: sima learn --backend <backend-name> --task "<task>" --path .
+3. If embedding retrieval is configured and existing/bulk-edited knowledge lacks vectors, run: sima index rebuild --path .
+4. Read the brief and use active SIMA memory/skills plus the current repository as context.
+5. Do the normal repository workflow: inspect files, use git/gh when relevant, edit files, and run real verification.
+6. Preserve evidence: changed files, test/build output, important decisions, and blockers.
+7. After successful bounded work, run: sima learn --backend <backend-name> --task "<task>" --path .
 
 Use the backend configured for this project. If no backend is obvious, run sima backend list . and pick the configured Claude/Codex profile. If no backend exists, tell the user exactly what is missing and do not fake learning.
 
@@ -63,8 +64,9 @@ Use this skill when the user invokes /sima-brief <task> or asks for a SIMA brief
 
 1. Treat the user's message after /sima-brief as the task. If no task is provided, ask for it and stop.
 2. Run: sima brief "<task>" --path .
-3. Summarize only the briefing sections that matter for the task.
-4. Do not paste unrelated raw history into the conversation.`
+3. If the user asks to refresh embeddings, or if embedding retrieval was just enabled for existing cards, run: sima index rebuild --path .
+4. Summarize only the briefing sections that matter for the task.
+5. Do not paste unrelated raw history into the conversation.`
 }
 
 func codexSIMARememberSkill() string {
