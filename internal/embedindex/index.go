@@ -22,6 +22,7 @@ import (
 )
 
 const indexRelPath = ".sima/index/embeddings.jsonl"
+const defaultMinScore = 0.75
 
 // Entry is one persisted embedding for active SIMA knowledge metadata.
 type Entry struct {
@@ -180,7 +181,7 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 	}
 	minScore := cfg.Embedding.MinScore
 	if minScore == 0 {
-		minScore = 0.20
+		minScore = defaultMinScore
 	}
 	type scored struct {
 		path  string

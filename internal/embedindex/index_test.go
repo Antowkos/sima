@@ -59,6 +59,42 @@ func TestSelectRelevantRefreshesStaleEditedCards(t *testing.T) {
 	}
 }
 
+func TestSelectRelevantDefaultMinScoreFiltersWeakMatches(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	writeCard(t, root, "strong.yaml", "active", "SwiftUI profile screen", "When building profile UI", "Use the profile view model.")
+	writeCard(t, root, "weak.yaml", "active", "Deployment workflow", "When deploying backend", "Use gh deployment checks.")
+	script := filepath.Join(root, "threshold-embed.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+out = []
+for item in req["texts"]:
+    ident = item["id"]
+    text = (item.get("text", "") + " " + item.get("path", "")).lower()
+    if ident == "__task__":
+        vec = [1.0, 0.0]
+    elif "strong" in text:
+        vec = [0.9, 0.4358898944]
+    else:
+        vec = [0.7, 0.7141428429]
+    out.append({"id": ident, "vector": vec})
+print(json.dumps({"embeddings": out}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Brief{Retrieval: "embedding", MaxSelected: 8, Embedding: config.BriefEmbedding{Command: "./threshold-embed.py", Model: "test-embed"}}
+	if _, err := Rebuild(root, cfg); err != nil {
+		t.Fatalf("Rebuild() error = %v", err)
+	}
+	selected, ok := SelectRelevant(root, []string{".sima/personal/memory/cards/strong.yaml", ".sima/personal/memory/cards/weak.yaml"}, "build SwiftUI profile screen", cfg)
+	if !ok || len(selected) != 1 || selected[0] != ".sima/personal/memory/cards/strong.yaml" {
+		t.Fatalf("default min score should keep strong match and drop weak baseline match: %#v ok=%v", selected, ok)
+	}
+}
+
 func setupProjectWithEmbedder(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
