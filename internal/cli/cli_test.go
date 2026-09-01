@@ -35,6 +35,27 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestIndexHelp(t *testing.T) {
+	for _, args := range [][]string{
+		{"sima", "index", "--help"},
+		{"sima", "index", "rebuild", "--help"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			code := Run(args, &out, &stderr)
+			if code != 0 {
+				t.Fatalf("code = %d, stderr = %s", code, stderr.String())
+			}
+			if !strings.Contains(out.String(), "Usage:") || !strings.Contains(out.String(), "sima index rebuild [--path <path>]") {
+				t.Fatalf("unexpected help output:\n%s", out.String())
+			}
+			if strings.Contains(stderr.String(), "unknown option") {
+				t.Fatalf("help should not report unknown option: %s", stderr.String())
+			}
+		})
+	}
+}
+
 func TestTeamCommandsInitPullStatus(t *testing.T) {
 	root := t.TempDir()
 	if _, initErr := simafs.Init(root); initErr != nil {

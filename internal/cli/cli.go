@@ -682,13 +682,20 @@ func runBrief(args []string, stdout, stderr io.Writer) int {
 }
 
 func runIndex(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		printIndexHelp(stdout)
+		return 0
+	}
 	if len(args) == 0 || args[0] != "rebuild" {
-		fmt.Fprintln(stderr, "usage: sima index rebuild [--path <path>]")
+		printIndexHelp(stderr)
 		return 2
 	}
 	root := "."
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
+		case "--help", "-h":
+			printIndexHelp(stdout)
+			return 0
 		case "--path":
 			if i+1 >= len(args) {
 				fmt.Fprintln(stderr, "--path requires a value")
@@ -719,6 +726,19 @@ func runIndex(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Embedding index rebuilt: %s\n", result.Path)
 	fmt.Fprintf(stdout, "Indexed: %d, skipped: %d\n", result.Indexed, result.Skipped)
 	return 0
+}
+
+func printIndexHelp(w io.Writer) {
+	fmt.Fprintln(w, `Usage:
+  sima index rebuild [--path <path>]
+
+Rebuild the optional embedding retrieval index for active SIMA memory and skills.
+
+Commands:
+  rebuild   Recompute .sima/index/embeddings.jsonl for active knowledge
+
+Options:
+  --path <path>   Project root containing .sima/`)
 }
 
 func runRun(args []string, stdout, stderr io.Writer) int {
