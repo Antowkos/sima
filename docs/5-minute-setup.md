@@ -78,6 +78,8 @@ sima lint .
 
 `sima install` refreshes SIMA-managed `CLAUDE.md`/`AGENTS.md` blocks, Claude slash commands, and Codex skills while preserving content outside managed blocks. Existing `.sima/config.yaml` values are not silently overwritten by new defaults; update config deliberately when release notes mention new settings. If embedding retrieval is enabled, or if memory/skill files were bulk/manual edited, also run:
 
+For example, configs created before the E5 threshold was tightened may still say `brief.embedding.min_score: 0.2`. Keep it if you want broad recall, or update it to the current recommendation, `min_score: 0.85`, if unrelated cards should be filtered out.
+
 ```bash
 sima index rebuild --path .
 ```

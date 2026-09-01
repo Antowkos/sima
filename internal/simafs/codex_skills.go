@@ -39,7 +39,7 @@ description: Use when the user invokes /sima, mentions SIMA flow, or wants a tas
 
 Use this skill when the user invokes /sima <task> or asks to run work through SIMA.
 
-After SIMA upgrades: before relying on new agent-facing features, run sima version, sima install --client all --path ., sima doctor ., and sima lint . before proceeding. This refreshes managed CLAUDE.md/AGENTS.md blocks, Claude slash commands, and Codex skills without overwriting content outside managed blocks. Existing .sima/config.yaml values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run sima index rebuild --path .
+After SIMA upgrades: before relying on new agent-facing features, run sima version, sima install --client all --path ., sima doctor ., and sima lint . before proceeding. This refreshes managed CLAUDE.md/AGENTS.md blocks, Claude slash commands, and Codex skills without overwriting content outside managed blocks. Existing .sima/config.yaml values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. For example, old E5 configs may still have brief.embedding.min_score: 0.2; update them to the current recommendation, min_score: 0.85, if unrelated cards should be filtered rather than only reranked. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run sima index rebuild --path .
 
 1. Treat the user's message after /sima as the task. If no task is provided, ask for it and stop.
 2. Run: sima brief "<task>" --path .

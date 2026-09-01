@@ -116,6 +116,8 @@ sima lint .
 
 This updates only SIMA-managed sections/files and preserves project-owned content. Existing `.sima/config.yaml` values are not silently overwritten by new defaults, so apply release-note config changes intentionally. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run:
 
+For example, older projects may still have `brief.embedding.min_score: 0.2`; `sima install` preserves that value. For the bundled E5 helper, update existing configs to the current recommendation, `min_score: 0.85`, if unrelated cards are still being included.
+
 ```bash
 sima index rebuild --path .
 ```

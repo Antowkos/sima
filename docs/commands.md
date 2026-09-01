@@ -44,7 +44,7 @@ brief:
     min_score: 0.85
 ```
 
-When embedding retrieval is enabled, SIMA maintains a persistent JSONL index at `.sima/index/embeddings.jsonl`. `sima apply` updates index rows for newly created, updated, superseded, or deprecated active knowledge. `sima brief` also refreshes stale/missing rows by comparing each active card/skill's metadata hash, so manual edits are picked up lazily. The default/recommended `min_score` is `0.85` for the E5 helper because unrelated text pairs often still have a high cosine baseline; tune it per project if briefs are too sparse or too broad. For existing projects or after bulk edits, run:
+When embedding retrieval is enabled, SIMA maintains a persistent JSONL index at `.sima/index/embeddings.jsonl`. `sima apply` updates index rows for newly created, updated, superseded, or deprecated active knowledge. `sima brief` also refreshes stale/missing rows by comparing each active card/skill's metadata hash, so manual edits are picked up lazily. The default/recommended `min_score` is `0.85` for the E5 helper because unrelated text pairs often still have a high cosine baseline; tune it per project if briefs are too broad or too sparse. Existing configs are preserved during upgrades, so projects that still have `min_score: 0.2` should update that setting manually if they want filtering rather than broad reranking.
 
 ```bash
 sima index rebuild --path .

@@ -65,6 +65,8 @@ This updates the SIMA-managed blocks in `CLAUDE.md` and `AGENTS.md`, refreshes C
 
 Existing `.sima/config.yaml` values are not silently overwritten by new release defaults. If a release introduces a new setting or recommends changing one, review and edit the existing config intentionally. If embedding retrieval is enabled, or if memory/skill files were bulk/manual edited, rebuild the index after the upgrade:
 
+For example, projects configured before `v0.1.0-alpha.4` may still have `brief.embedding.min_score: 0.2`. That value is intentionally preserved during `sima install`, but E5-style embeddings usually need a stricter threshold; update existing configs to the current recommendation, `min_score: 0.85`, when you want unrelated cards filtered out rather than only reranked.
+
 ```bash
 sima index rebuild --path .
 ```

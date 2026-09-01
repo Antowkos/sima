@@ -139,7 +139,7 @@ sima doctor .
 sima lint .
 `+"```"+`
 
-This updates the managed SIMA blocks in `+"`"+`CLAUDE.md`+"`"+` and `+"`"+`AGENTS.md`+"`"+` plus Claude slash commands and Codex skills while preserving content outside managed blocks. Existing `+"`"+`.sima/config.yaml`+"`"+` values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run `+"`"+`sima index rebuild --path .`+"`"+`.
+This updates the managed SIMA blocks in `+"`"+`CLAUDE.md`+"`"+` and `+"`"+`AGENTS.md`+"`"+` plus Claude slash commands and Codex skills while preserving content outside managed blocks. Existing `+"`"+`.sima/config.yaml`+"`"+` values are not silently overwritten by new defaults; review/update config intentionally when release notes mention new settings. For example, old E5 configs may still have `+"`"+`brief.embedding.min_score: 0.2`+"`"+`; update them to the current recommendation, `+"`"+`min_score: 0.85`+"`"+`, if unrelated cards should be filtered rather than only reranked. If embedding retrieval is enabled or knowledge was bulk/manual edited, also run `+"`"+`sima index rebuild --path .`+"`"+`.
 
 ## Before starting a task
 

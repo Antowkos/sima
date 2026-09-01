@@ -33,7 +33,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 			t.Fatalf("read %s: %v", rel, err)
 		}
 		text := string(data)
-		for _, want := range []string{managedBlockStart, "After SIMA upgrades", "sima version", "sima install --client all --path .", "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "GitHub issues", "Do not enable webhooks or automatic agent pickup from issues", "Do not learn: transient task progress", managedBlockEnd} {
+		for _, want := range []string{managedBlockStart, "After SIMA upgrades", "sima version", "sima install --client all --path .", "brief.embedding.min_score: 0.2", "min_score: 0.85", "sima brief \"<task>\" --path .", "sima index rebuild --path .", "sima learn --backend <backend-name> --task \"<task>\" --path .", "GitHub issues", "Do not enable webhooks or automatic agent pickup from issues", "Do not learn: transient task progress", managedBlockEnd} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, text)
 			}
@@ -70,7 +70,7 @@ func TestInstallInstructionsWritesManagedBlocks(t *testing.T) {
 	if !strings.Contains(string(codexSIMA), "GitHub issues: create issues only when the user explicitly asks") {
 		t.Fatalf("codex sima skill missing GitHub issue safety instructions:\n%s", string(codexSIMA))
 	}
-	if !strings.Contains(string(codexSIMA), "After SIMA upgrades") || !strings.Contains(string(codexSIMA), "sima install --client all --path .") {
+	if !strings.Contains(string(codexSIMA), "After SIMA upgrades") || !strings.Contains(string(codexSIMA), "sima install --client all --path .") || !strings.Contains(string(codexSIMA), "min_score: 0.85") {
 		t.Fatalf("codex sima skill missing upgrade refresh instructions:\n%s", string(codexSIMA))
 	}
 }
