@@ -227,6 +227,77 @@ print(json.dumps({"embeddings": out}))
 	}
 }
 
+func TestSelectRelevantWholeTaskTopKRescueRequiresLexicalSupport(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	writeCard(t, root, "pr.yaml", "active", "PR title and body format", "When opening or drafting a pull request in this repo", "Use the repository pull request format.")
+	writeCard(t, root, "android.yaml", "active", "Android core repo reference", "When the user references Android behavior for comparison while working on an iOS feature", "Compare feature-flag patterns and domain models across platforms.")
+	writeCard(t, root, "deploy.yaml", "active", "Deployment workflow", "When deploying backend", "Use deployment checks.")
+
+	script := filepath.Join(root, "single-topic-scores.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import math, json, sys
+req = json.load(sys.stdin)
+out = []
+for item in req["texts"]:
+    ident = item["id"]
+    text = (item.get("text", "") + " " + item.get("path", "")).lower()
+    if ident == "__task__" and "unit" in text:
+        vec = [math.sqrt(1 - 0.8385**2), 0.8385, 0.0]
+    elif ident == "__task__" and "feature/x" in text:
+        vec = [math.sqrt(1 - 0.8385**2), 0.0, 0.8385]
+    elif ident == "__task__" and "pr" in text:
+        vec = [math.sqrt(1 - 0.8299**2), 0.8299, 0.0]
+    elif ident == "__task__" and "android" in text:
+        vec = [math.sqrt(1 - 0.8497**2), 0.0, 0.8497]
+    elif "pull request" in text or "pr" in text:
+        vec = [0.0, 1.0, 0.0]
+    elif "android" in text or "feature-flag" in text:
+        vec = [0.0, 0.0, 1.0]
+    elif "deploy" in text:
+        vec = [-1.0, 0.0, 0.0]
+    else:
+        vec = [0.0, -1.0, 0.0]
+    out.append({"id": ident, "vector": vec})
+print(json.dumps({"embeddings": out}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Brief{
+		Retrieval:   "embedding",
+		MaxSelected: 8,
+		Embedding:   config.BriefEmbedding{Command: "./single-topic-scores.py", Model: "test-embed", MinScore: 0.85},
+		Query:       config.BriefQuery{Decomposition: "heuristic", MaxParts: 4, TopKPerPart: 1, MinPartScore: 0.80},
+	}
+	paths := []string{".sima/personal/memory/cards/pr.yaml", ".sima/personal/memory/cards/android.yaml", ".sima/personal/memory/cards/deploy.yaml"}
+	if _, err := Rebuild(root, cfg); err != nil {
+		t.Fatalf("Rebuild() error = %v", err)
+	}
+
+	selected, ok := SelectRelevant(root, paths, "открыть PR для новой фичи BUSDEL-700", cfg)
+	if !ok || len(selected) != 1 || selected[0] != ".sima/personal/memory/cards/pr.yaml" {
+		t.Fatalf("whole-task rescue should recover PR match below global threshold: %#v ok=%v", selected, ok)
+	}
+
+	selected, ok = SelectRelevant(root, paths, "сверить фичу с реализацией на android", cfg)
+	if !ok || len(selected) != 1 || selected[0] != ".sima/personal/memory/cards/android.yaml" {
+		t.Fatalf("whole-task rescue should recover Android match below global threshold: %#v ok=%v", selected, ok)
+	}
+
+	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
+	if !ok || len(selected) != 0 {
+		t.Fatalf("whole-task rescue should not recover unrelated PR noise without lexical support: %#v ok=%v", selected, ok)
+	}
+
+	selected, ok = SelectRelevant(root, paths, "задеплоить bus приложение с ветки feature/x", cfg)
+	if !ok || len(selected) != 0 {
+		t.Fatalf("whole-task rescue should not use generic feature token as lexical support: %#v ok=%v", selected, ok)
+	}
+}
+
 func setupProjectWithEmbedder(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

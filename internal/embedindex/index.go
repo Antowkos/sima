@@ -209,9 +209,11 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 		minScore = defaultMinScore
 	}
 	scoredByPath := map[string]scoredItem{}
+	candidatesByPath := map[string]Candidate{}
 	allByQuery := map[string][]scoredItem{}
 	highConfidence := false
 	for _, c := range current {
+		candidatesByPath[c.Path] = c
 		entry, ok := entryByPath[c.Path]
 		if !ok || entry.TextHash != c.TextHash || entry.Model != cfg.Embedding.Model {
 			continue
@@ -241,6 +243,15 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 					scoredByPath[item.path] = item
 				}
 			}
+		}
+	}
+	if len(scoredByPath) == 0 {
+		for _, item := range topKRescue(allByQuery["__task__"], cfg.Query) {
+			candidate, ok := candidatesByPath[item.path]
+			if !ok || !lexicalSupport(task, candidate.Path+"\n"+candidate.Text) {
+				continue
+			}
+			scoredByPath[item.path] = item
 		}
 	}
 	scoredItems := make([]scoredItem, 0, len(scoredByPath))
@@ -390,6 +401,54 @@ func topKRescue(items []scoredItem, cfg config.BriefQuery) []scoredItem {
 		}
 	}
 	return rescued
+}
+
+func lexicalSupport(task, candidate string) bool {
+	taskTokens := lexicalRescueTokens(task)
+	if len(taskTokens) == 0 {
+		return false
+	}
+	for token := range lexicalRescueTokens(candidate) {
+		if taskTokens[token] {
+			return true
+		}
+	}
+	return false
+}
+
+func lexicalRescueTokens(text string) map[string]bool {
+	tokens := map[string]bool{}
+	for _, field := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r >= 'а' && r <= 'я' || r == 'ё')
+	}) {
+		field = strings.TrimSpace(field)
+		if rescueStopToken(field) || (len([]rune(field)) < 3 && !rescueShortToken(field)) {
+			continue
+		}
+		tokens[field] = true
+		if strings.HasSuffix(field, "ing") && len(field) > 5 {
+			tokens[strings.TrimSuffix(field, "ing")] = true
+		}
+	}
+	return tokens
+}
+
+func rescueStopToken(token string) bool {
+	switch token {
+	case "when", "while", "before", "after", "during", "this", "that", "with", "from", "into", "project", "repo", "task", "work", "working", "active", "memory", "skill", "sima", "brief", "user", "source", "status", "title", "trigger", "summary", "type", "kind", "the", "and", "for", "feature", "features", "или", "для", "при", "про", "это", "как", "что", "когда", "если", "надо", "нужно", "проект", "репо", "задача", "память", "скил", "активный", "фича", "фичи", "фичу", "фиче", "новая", "новой":
+		return true
+	default:
+		return false
+	}
+}
+
+func rescueShortToken(token string) bool {
+	switch token {
+	case "pr", "ui", "ux", "ci", "cd", "ai", "ml", "qa", "db", "api":
+		return true
+	default:
+		return false
+	}
 }
 
 func Read(projectRoot string) ([]Entry, error) {
