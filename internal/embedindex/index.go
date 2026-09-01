@@ -57,6 +57,15 @@ type embeddingResponse struct {
 	Embeddings []embeddingVector `json:"embeddings"`
 }
 
+type queryDecompositionRequest struct {
+	Task     string `json:"task"`
+	MaxParts int    `json:"max_parts,omitempty"`
+}
+
+type queryDecompositionResponse struct {
+	Queries []string `json:"queries"`
+}
+
 type embeddingVector struct {
 	ID     string    `json:"id"`
 	Vector []float64 `json:"vector"`
@@ -167,12 +176,18 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 	for _, entry := range entries {
 		entryByPath[entry.Path] = entry
 	}
-	taskVectors, err := runEmbeddingCommand(projectRoot, cfg.Embedding.Command, cfg.Embedding.Model, []embeddingText{{ID: "__task__", Text: task}})
+	queryTexts := queryEmbeddingTexts(projectRoot, task, cfg)
+	taskVectors, err := runEmbeddingCommand(projectRoot, cfg.Embedding.Command, cfg.Embedding.Model, queryTexts)
 	if err != nil {
 		return nil, false
 	}
-	taskVec := taskVectors["__task__"]
-	if len(taskVec) == 0 {
+	var queryVectors [][]float64
+	for _, query := range queryTexts {
+		if vec := taskVectors[query.ID]; len(vec) > 0 {
+			queryVectors = append(queryVectors, vec)
+		}
+	}
+	if len(queryVectors) == 0 {
 		return nil, false
 	}
 	maxSelected := cfg.MaxSelected
@@ -193,7 +208,7 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 		if !ok || entry.TextHash != c.TextHash || entry.Model != cfg.Embedding.Model {
 			continue
 		}
-		score := cosine(taskVec, entry.Vector)
+		score := maxCosine(queryVectors, entry.Vector)
 		if score >= minScore {
 			scoredItems = append(scoredItems, scored{path: c.Path, score: score})
 		}
@@ -207,6 +222,126 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 		selected = append(selected, item.path)
 	}
 	return selected, len(selected) > 0
+}
+
+func queryEmbeddingTexts(projectRoot, task string, cfg config.Brief) []embeddingText {
+	queries := decomposeTask(projectRoot, task, cfg.Query)
+	texts := make([]embeddingText, 0, len(queries))
+	for i, query := range queries {
+		id := "__task__"
+		if i > 0 {
+			id = fmt.Sprintf("__task_part_%d__", i)
+		}
+		texts = append(texts, embeddingText{ID: id, Text: query})
+	}
+	return texts
+}
+
+func decomposeTask(projectRoot, task string, cfg config.BriefQuery) []string {
+	maxParts := cfg.MaxParts
+	if maxParts <= 0 {
+		maxParts = 4
+	}
+	if maxParts > 8 {
+		maxParts = 8
+	}
+	queries := []string{strings.TrimSpace(task)}
+	mode := strings.ToLower(strings.TrimSpace(cfg.Decomposition))
+	switch mode {
+	case "command", "model":
+		parts, err := runQueryDecompositionCommand(projectRoot, cfg.Command, task, maxParts)
+		if err == nil {
+			queries = append(queries, parts...)
+		}
+	case "heuristic":
+		queries = append(queries, heuristicTaskParts(task, maxParts)...)
+	}
+	return uniqueQueries(queries, maxParts+1)
+}
+
+func runQueryDecompositionCommand(projectRoot, command, task string, maxParts int) ([]string, error) {
+	if strings.TrimSpace(command) == "" {
+		return nil, fmt.Errorf("brief.query.command is required")
+	}
+	payload, err := json.Marshal(queryDecompositionRequest{Task: task, MaxParts: maxParts})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = projectRoot
+	cmd.Stdin = bytes.NewReader(payload)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var response queryDecompositionResponse
+	if err := json.Unmarshal(bytes.TrimSpace(out), &response); err != nil {
+		return nil, err
+	}
+	return uniqueQueries(response.Queries, maxParts), nil
+}
+
+func heuristicTaskParts(task string, maxParts int) []string {
+	normalized := strings.TrimSpace(task)
+	if normalized == "" {
+		return nil
+	}
+	for _, sep := range []string{" и ", " and ", ";", ","} {
+		parts := splitQuery(normalized, sep, maxParts)
+		if len(parts) > 1 {
+			return parts
+		}
+	}
+	return nil
+}
+
+func splitQuery(task, sep string, maxParts int) []string {
+	raw := strings.Split(task, sep)
+	parts := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if len([]rune(part)) < 3 {
+			continue
+		}
+		parts = append(parts, part)
+		if len(parts) >= maxParts {
+			break
+		}
+	}
+	return parts
+}
+
+func uniqueQueries(values []string, limit int) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, value)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func maxCosine(queries [][]float64, item []float64) float64 {
+	best := -1.0
+	for _, query := range queries {
+		if score := cosine(query, item); score > best {
+			best = score
+		}
+	}
+	return best
 }
 
 func Read(projectRoot string) ([]Entry, error) {

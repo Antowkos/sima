@@ -42,9 +42,25 @@ brief:
     command: ./scripts/sima-embed-e5.py
     model: intfloat/multilingual-e5-small
     min_score: 0.85
+  query:
+    decomposition: command # none | heuristic | command
+    command: ./scripts/sima-split-query.py
+    max_parts: 4
 ```
 
 When embedding retrieval is enabled, SIMA maintains a persistent JSONL index at `.sima/index/embeddings.jsonl`. `sima apply` updates index rows for newly created, updated, superseded, or deprecated active knowledge. `sima brief` also refreshes stale/missing rows by comparing each active card/skill's metadata hash, so manual edits are picked up lazily. The default/recommended `min_score` is `0.85` for the E5 helper because unrelated text pairs often still have a high cosine baseline; tune it per project if briefs are too broad or too sparse. Existing configs are preserved during upgrades, so projects that still have `min_score: 0.2` should update that setting manually if they want filtering rather than broad reranking.
+
+`brief.query.decomposition` can improve multi-topic tasks whose single embedding gets diluted across intents. `none` embeds the original task only. `heuristic` adds conservative local splits on conjunctions/punctuation. `command` calls an external splitter, which can be backed by a local or hosted model, and unions matches from the original task plus returned sub-queries. Splitter failures fall back to the original task only.
+
+The query decomposition command receives JSON on stdin and returns sub-queries on stdout:
+
+```json
+{"task":"исправить guard-else-return и открыть PR","max_parts":4}
+```
+
+```json
+{"queries":["исправить guard-else-return","открыть PR"]}
+```
 
 ```bash
 sima index rebuild --path .

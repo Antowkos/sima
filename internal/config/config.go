@@ -43,12 +43,19 @@ type Brief struct {
 	Retrieval   string         `yaml:"retrieval,omitempty"`
 	MaxSelected int            `yaml:"max_selected,omitempty"`
 	Embedding   BriefEmbedding `yaml:"embedding,omitempty"`
+	Query       BriefQuery     `yaml:"query,omitempty"`
 }
 
 type BriefEmbedding struct {
 	Command  string  `yaml:"command,omitempty"`
 	Model    string  `yaml:"model,omitempty"`
 	MinScore float64 `yaml:"min_score,omitempty"`
+}
+
+type BriefQuery struct {
+	Decomposition string `yaml:"decomposition,omitempty"`
+	Command       string `yaml:"command,omitempty"`
+	MaxParts      int    `yaml:"max_parts,omitempty"`
 }
 
 type Team struct {

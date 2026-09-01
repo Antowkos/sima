@@ -19,6 +19,10 @@ brief:
     command: ""
     model: intfloat/multilingual-e5-small
     min_score: 0.85
+  query:
+    decomposition: none # none | heuristic | command
+    command: ""
+    max_parts: 4
 backends: {}
 `
 

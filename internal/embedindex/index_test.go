@@ -95,6 +95,77 @@ print(json.dumps({"embeddings": out}))
 	}
 }
 
+func TestSelectRelevantCommandDecompositionRecoversMultiTopicMatches(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	writeCard(t, root, "guard.yaml", "active", "Guard before return", "When editing guard else return", "Keep guard before return style.")
+	writeCard(t, root, "pr.yaml", "active", "PR title and body format", "When opening a pull request", "Use the repository pull request format.")
+	writeCard(t, root, "deploy.yaml", "active", "Deployment workflow", "When deploying backend", "Use deployment checks.")
+
+	embedScript := filepath.Join(root, "topic-embed.py")
+	if err := os.WriteFile(embedScript, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+out = []
+for item in req["texts"]:
+    ident = item["id"]
+    text = (item.get("text", "") + " " + item.get("path", "")).lower()
+    if ident == "__task__":
+        vec = [0.6, 0.6]
+    elif "guard" in text:
+        vec = [1.0, 0.0]
+    elif "pull request" in text or "pr" in text:
+        vec = [0.0, 1.0]
+    elif "deploy" in text:
+        vec = [-1.0, 0.0]
+    else:
+        vec = [0.0, -1.0]
+    out.append({"id": ident, "vector": vec})
+print(json.dumps({"embeddings": out}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	splitScript := filepath.Join(root, "split-query.py")
+	if err := os.WriteFile(splitScript, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+task = req.get("task", "").lower()
+queries = []
+if "guard" in task and "pr" in task:
+    queries = ["исправить guard-else-return", "открыть PR"]
+print(json.dumps({"queries": queries[: req.get("max_parts", 4)]}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Brief{
+		Retrieval:   "embedding",
+		MaxSelected: 8,
+		Embedding:   config.BriefEmbedding{Command: "./topic-embed.py", Model: "test-embed", MinScore: 0.85},
+	}
+	paths := []string{".sima/personal/memory/cards/guard.yaml", ".sima/personal/memory/cards/pr.yaml", ".sima/personal/memory/cards/deploy.yaml"}
+	if _, err := Rebuild(root, cfg); err != nil {
+		t.Fatalf("Rebuild() error = %v", err)
+	}
+	selected, ok := SelectRelevant(root, paths, "исправить guard-else-return и открыть PR", cfg)
+	if ok || len(selected) != 0 {
+		t.Fatalf("without decomposition diluted multi-topic query should not cross strict threshold: %#v ok=%v", selected, ok)
+	}
+
+	cfg.Query = config.BriefQuery{Decomposition: "command", Command: "./split-query.py", MaxParts: 4}
+	selected, ok = SelectRelevant(root, paths, "исправить guard-else-return и открыть PR", cfg)
+	if !ok || len(selected) != 2 || selected[0] != ".sima/personal/memory/cards/guard.yaml" || selected[1] != ".sima/personal/memory/cards/pr.yaml" {
+		t.Fatalf("command decomposition should recover both relevant topic cards without deploy noise: %#v ok=%v", selected, ok)
+	}
+
+	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
+	if ok || len(selected) != 0 {
+		t.Fatalf("unrelated query should stay empty with decomposition enabled: %#v ok=%v", selected, ok)
+	}
+}
+
 func setupProjectWithEmbedder(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

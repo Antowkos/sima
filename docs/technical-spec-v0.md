@@ -44,6 +44,8 @@ Brief content is bounded: active memory/skill snippets are filtered by task rele
 
 The reference optional model is `intfloat/multilingual-e5-small`, which works for mixed Russian/English project text. The included helper `scripts/sima-embed-e5.py` uses `sentence-transformers` and exits after producing vectors; users who want lower latency can point `brief.embedding.command` at their own local embedding server wrapper instead. Active knowledge embeddings are persisted in `.sima/index/embeddings.jsonl`; `sima apply` updates affected rows after learning changes, `sima brief` lazily refreshes stale or missing rows after manual edits, and `sima index rebuild --path .` recomputes the index on demand. Because E5-style embeddings often produce relatively high baseline cosine scores even for unrelated short metadata, the default `min_score` is `0.85` rather than a very low threshold.
 
+Embedding retrieval can optionally decompose a task into sub-queries before scoring. This addresses multi-topic prompts where a single task vector is diluted and misses one of several relevant cards. `brief.query.decomposition: command` invokes an external splitter with compact JSON (`task`, `max_parts`) and unions matches from the original task plus returned sub-queries; the splitter can be a model-backed helper so SIMA does not bake heuristic-only parsing or an LLM runtime into the Go binary. `brief.query.decomposition: heuristic` provides a conservative local splitter for simple conjunction/punctuation cases. If decomposition is disabled or fails, SIMA falls back to embedding the original task only.
+
 ## Backend profiles
 
 SIMA must support multiple Claude Code/Codex installations and configs on the same machine. Backends are named profiles in `.sima/config.yaml`:
