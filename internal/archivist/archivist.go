@@ -91,9 +91,8 @@ func decide(projectRoot, proposalPath string, p proposal.Proposal) (string, []st
 		notes = append(notes, p.CandidateErrors...)
 		return "defer", notes
 	}
-	item := reviewItem(projectRoot, proposalPath)
-	if len(item.Problems) > 0 {
-		return "reject", append([]string{"review validation failed"}, item.Problems...)
+	if problems := review.Validate(p); len(problems) > 0 {
+		return "reject", append([]string{"review validation failed"}, problems...)
 	}
 	if p.Scope != "personal" {
 		return "defer", []string{"v0 archivist only auto-approves personal scope"}

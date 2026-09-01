@@ -202,6 +202,37 @@ func TestDecideUsesModelArchivistBackend(t *testing.T) {
 	}
 }
 
+func TestDecideModelArchivistUsesUpdatedInMemoryLearning(t *testing.T) {
+	root, rememberResult := createPullRequestPolicyProposal(t)
+	script := filepath.Join(root, "model-archivist.sh")
+	output := `{"decision":"apply","learning":{"destination":"memory","operation":"create","quality":{"durable":true,"triggerable":true,"evidence_backed":true,"non_transient":true,"reusable":true},"notes":["model corrected the proposal learning quality"]},"notes":["model approved explicit PR house-style policy"]}`
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' '"+output+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.AddBackend(root, "archivist-model", config.BackendProfile{Kind: "claude-code", Executable: script}, false); err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+
+	result, err := Decide(root, Options{Target: rememberResult.Path, BackendName: "archivist-model", Now: time.Date(2026, 9, 1, 13, 10, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Decide() error = %v", err)
+	}
+	joined := strings.Join(result.Notes, "\n")
+	if result.Decision != "apply" || strings.Contains(joined, "durable=false") || strings.Contains(joined, "non_transient=false") || strings.Contains(joined, "review validation failed") {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	data, err := os.ReadFile(rememberResult.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"archivist_decision: apply", "durable: true", "non_transient: true", "model corrected the proposal learning quality"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proposal missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestBuildArchivistArgsUsesStrictSharedSchema(t *testing.T) {
 	args := buildArchivistArgs(config.BackendProfile{Kind: "claude-code", Metadata: map[string]string{"output_format": "json_schema"}}, "review")
 	want := []string{"-p", "--output-format", "json", "--json-schema"}
@@ -277,6 +308,26 @@ func TestBuildArchivistPromptIncludesFullEvidenceAndActiveKnowledge(t *testing.T
 	if strings.Contains(prompt, "Deprecated packet memory") {
 		t.Fatalf("prompt included inactive knowledge:\n%s", prompt)
 	}
+}
+
+func createPullRequestPolicyProposal(t *testing.T) (string, proposal.RememberResult) {
+	t.Helper()
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	result, err := proposal.Remember(root, proposal.RememberOptions{
+		Text:    "User's explicit standing house style for every PR opened in this repo. PR title is TICKETKEY colon short description matching the commit summary. PR body opens with a level-2 markdown heading linking the Jira ticket and repeating the title, then a section titled Что сделано listing what was done. Never include Summary or Test plan template sections, checklists, emojis, or a bot or AI attribution footer.",
+		Source:  "user",
+		Type:    "invariant",
+		Title:   "PR title and body format basics",
+		Trigger: "When opening a pull request in this repo",
+		Now:     time.Date(2026, 9, 1, 13, 5, 4, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Remember() error = %v", err)
+	}
+	return root, result
 }
 
 func createProposal(t *testing.T, task string, suspicious bool) (string, string) {

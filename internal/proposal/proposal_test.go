@@ -218,6 +218,37 @@ func TestGenerateUsesStructuredJSONFromStdout(t *testing.T) {
 	}
 }
 
+func TestRememberPullRequestFormattingPolicyIsDurable(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	result, err := Remember(root, RememberOptions{
+		Text:    "User's explicit standing house style for every PR opened in this repo. PR title is TICKETKEY colon short description matching the commit summary. PR body opens with a level-2 markdown heading linking the Jira ticket and repeating the title, then a section titled Что сделано listing what was done. Never include Summary or Test plan template sections, checklists, emojis, or a bot or AI attribution footer.",
+		Source:  "user",
+		Type:    "invariant",
+		Title:   "PR title and body format basics",
+		Trigger: "When opening a pull request in this repo",
+		Now:     time.Date(2026, 9, 1, 13, 5, 4, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Remember() error = %v", err)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"destination: memory", "durable: true", "non_transient: true"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("remember proposal missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "looks transient") {
+		t.Fatalf("pull request house-style policy was misclassified as transient:\n%s", text)
+	}
+}
+
 func TestGenerateUsesStructuredLifecycleDeprecationFromStdout(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {

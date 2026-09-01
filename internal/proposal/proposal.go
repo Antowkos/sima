@@ -649,7 +649,7 @@ func looksTriggerable(text string) bool {
 
 func containsTransientLesson(text string) bool {
 	lower := strings.ToLower(text)
-	transient := []string{"commit ", "committed ", "pushed ", "pr #", "pull request", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
+	transient := []string{"committed ", "pushed ", "opened pr", "merged pr", "closed pr", "pr #", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
 	for _, marker := range transient {
 		if strings.Contains(lower, marker) {
 			return true

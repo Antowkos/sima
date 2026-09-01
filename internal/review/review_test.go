@@ -112,3 +112,31 @@ candidate_memories:
 		}
 	}
 }
+
+func TestReviewAcceptsPullRequestFormattingPolicy(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	result, err := proposal.Remember(root, proposal.RememberOptions{
+		Text:    "User's explicit standing house style for every PR opened in this repo. PR title is TICKETKEY colon short description matching the commit summary. PR body opens with a level-2 markdown heading linking the Jira ticket and repeating the title, then a section titled Что сделано listing what was done. Never include Summary or Test plan template sections, checklists, emojis, or a bot or AI attribution footer.",
+		Source:  "user",
+		Type:    "invariant",
+		Title:   "PR title and body format basics",
+		Trigger: "When opening a pull request in this repo",
+		Now:     time.Date(2026, 9, 1, 13, 5, 4, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Remember() error = %v", err)
+	}
+	reviewResult, err := Review(root, Options{})
+	if err != nil {
+		t.Fatalf("Review() error = %v", err)
+	}
+	if len(reviewResult.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(reviewResult.Items))
+	}
+	if len(reviewResult.Items[0].Problems) != 0 {
+		t.Fatalf("PR-format policy should pass review validation; proposal=%s problems=%v", result.Path, reviewResult.Items[0].Problems)
+	}
+}

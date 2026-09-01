@@ -81,11 +81,11 @@ func readProposal(projectRoot, path string) Item {
 	item.Evidence = len(p.Evidence)
 	item.Destination = p.Learning.Destination
 	item.Operation = p.Learning.Operation
-	item.Problems = validate(p)
+	item.Problems = Validate(p)
 	return item
 }
 
-func validate(p proposal.Proposal) []string {
+func Validate(p proposal.Proposal) []string {
 	var problems []string
 	if p.Version == 0 {
 		problems = append(problems, "missing version")
@@ -212,7 +212,7 @@ func looksTriggerable(text string) bool {
 
 func containsTransientLesson(text string) bool {
 	lower := strings.ToLower(text)
-	transient := []string{"commit ", "committed ", "pushed ", "pr #", "pull request", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
+	transient := []string{"committed ", "pushed ", "opened pr", "merged pr", "closed pr", "pr #", "issue #", "today ", "yesterday ", "just now", "this run", "this task", "applied proposal", "smoke test completed"}
 	for _, marker := range transient {
 		if strings.Contains(lower, marker) {
 			return true
