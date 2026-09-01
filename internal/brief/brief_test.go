@@ -130,6 +130,48 @@ print(json.dumps({"embeddings": items}))
 	}
 }
 
+func TestGenerateHybridDoesNotLexicalFallbackAfterSuccessfulZeroEmbeddingMatches(t *testing.T) {
+	root := t.TempDir()
+	if _, err := simafs.Init(root); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".sima", "personal", "memory", "cards", "android-feature.yaml"), []byte("id: android-feature\nstatus: active\ntype: invariant\ntitle: Android feature parity\ntrigger: When comparing Android behavior while working on an iOS feature\nsummary: Compare feature-flag patterns and domain models across platforms.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(root, "zero-embed.py")
+	if err := os.WriteFile(script, []byte(`#!/usr/bin/env python3
+import json, sys
+req = json.load(sys.stdin)
+items = []
+for item in req["texts"]:
+    if item["id"] == "__task__":
+        vec = [1.0, 0.0]
+    else:
+        vec = [0.0, 1.0]
+    items.append({"id": item["id"], "vector": vec})
+print(json.dumps({"embeddings": items}))
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Brief = config.Brief{Retrieval: "hybrid", Embedding: config.BriefEmbedding{Command: "./zero-embed.py", Model: "intfloat/multilingual-e5-small", MinScore: 0.85}}
+	cfg.LearnConfigured = true
+	if err := config.Save(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Generate(root, Options{Task: "задеплоить bus приложение с ветки feature/x", Now: time.Date(2026, 9, 1, 17, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if strings.Contains(result.Content, "android-feature.yaml") || strings.Contains(result.Content, "feature-flag patterns") {
+		t.Fatalf("successful zero-match embedding pass should not fall through to lexical token overlap:\n%s", result.Content)
+	}
+}
+
 func TestGenerateFallsBackToLexicalWhenEmbeddingFails(t *testing.T) {
 	root := t.TempDir()
 	if _, err := simafs.Init(root); err != nil {

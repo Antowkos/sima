@@ -255,7 +255,7 @@ func SelectRelevant(projectRoot string, paths []string, task string, cfg config.
 	for _, item := range scoredItems {
 		selected = append(selected, item.path)
 	}
-	return selected, len(selected) > 0
+	return selected, true
 }
 
 func queryEmbeddingTexts(projectRoot, task string, cfg config.Brief) []embeddingText {

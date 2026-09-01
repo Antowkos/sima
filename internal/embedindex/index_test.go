@@ -150,8 +150,8 @@ print(json.dumps({"queries": queries[: req.get("max_parts", 4)]}))
 		t.Fatalf("Rebuild() error = %v", err)
 	}
 	selected, ok := SelectRelevant(root, paths, "исправить guard-else-return и открыть PR", cfg)
-	if ok || len(selected) != 0 {
-		t.Fatalf("without decomposition diluted multi-topic query should not cross strict threshold: %#v ok=%v", selected, ok)
+	if !ok || len(selected) != 0 {
+		t.Fatalf("without decomposition diluted multi-topic query should complete with no matches: %#v ok=%v", selected, ok)
 	}
 
 	cfg.Query = config.BriefQuery{Decomposition: "command", Command: "./split-query.py", MaxParts: 4}
@@ -161,8 +161,8 @@ print(json.dumps({"queries": queries[: req.get("max_parts", 4)]}))
 	}
 
 	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
-	if ok || len(selected) != 0 {
-		t.Fatalf("unrelated query should stay empty with decomposition enabled: %#v ok=%v", selected, ok)
+	if !ok || len(selected) != 0 {
+		t.Fatalf("unrelated query should complete with no matches when decomposition is enabled: %#v ok=%v", selected, ok)
 	}
 }
 
@@ -222,7 +222,7 @@ print(json.dumps({"embeddings": out}))
 	}
 
 	selected, ok = SelectRelevant(root, paths, "написать unit-тест для парсера ответов API", cfg)
-	if ok || len(selected) != 0 {
+	if !ok || len(selected) != 0 {
 		t.Fatalf("unrelated 0.8385 PR noise should not be rescued without a high-confidence anchor: %#v ok=%v", selected, ok)
 	}
 }
